@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+
+{% block title %}Blacklist - Collector DATEV{% endblock %}
+
+{% block content %}
+<div class="flex justify-between items-center mb-6">
+    <h1 class="text-3xl font-bold">Domain Blacklist</h1>
+    <button class="btn btn-primary" onclick="add_modal.showModal()">
+        <i class="ti ti-plus"></i>
+        Domain hinzufügen
+    </button>
+</div>
+
+<!-- Domains Table -->
+<div class="card bg-base-100 shadow-xl">
+    <div class="card-body">
+        <div class="overflow-x-auto">
+            <table class="table" data-datatable>
+                <thead>
+                    <tr>
+                        <th>Domain</th>
+                        <th>Kategorie</th>
+                        <th>Grund</th>
+                        <th>Erstellt</th>
+                        <th>Aktionen</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for domain in domains %}
+                    <tr>
+                        <td class="font-mono">{{ domain.domain }}</td>
+                        <td>
+                            <span class="badge badge-outline">{{ domain.category }}</span>
+                        </td>
+                        <td class="max-w-xs truncate">{{ domain.reason or '-' }}</td>
+                        <td>{{ domain.created_at.strftime('%d.%m.%Y') if domain.created_at else '-' }}</td>
+                        <td>
+                            <div class="join">
+                                <button class="btn btn-ghost btn-xs join-item"
+                                        onclick="openEditModal({{ domain.id }}, '{{ domain.domain }}', '{{ domain.category }}', '{{ domain.reason or '' }}')">
+                                    <i class="ti ti-edit"></i>
+                                </button>
+                                <form action="{{ url_for('blacklist.delete', domain_id=domain.id) }}"
+                                      method="POST"
+                                      onsubmit="return confirm('Domain wirklich löschen?')">
+                                    <button type="submit" class="btn btn-ghost btn-xs text-error join-item">
+                                        <i class="ti ti-trash"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Add Modal -->
+<dialog id="add_modal" class="modal">
+    <div class="modal-box">
+        <h3 class="font-bold text-lg mb-4">Domain hinzufügen</h3>
+        <form action="{{ url_for('blacklist.add') }}" method="POST">
+            <div class="form-control mb-4">
+                <label class="label">
+                    <span class="label-text">Domain</span>
+                </label>
+                <input type="text" name="domain" placeholder="z.B. gmail.com" class="input input-bordered" required>
+            </div>
+
+            <div class="form-control mb-4">
+                <label class="label">
+                    <span class="label-text">Kategorie</span>
+                </label>
+                <select name="category" class="select select-bordered">
+                    {% for value, label in categories %}
+                    <option value="{{ value }}">{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-control mb-4">
+                <label class="label">
+                    <span class="label-text">Grund (optional)</span>
+                </label>
+                <textarea name="reason" class="textarea textarea-bordered" placeholder="Warum auf der Blacklist?"></textarea>
+            </div>
+
+            <div class="modal-action">
+                <button type="button" class="btn" onclick="add_modal.close()">Abbrechen</button>
+                <button type="submit" class="btn btn-primary">Hinzufügen</button>
+            </div>
+        </form>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+        <button>close</button>
+    </form>
+</dialog>
+
+<!-- Edit Modal -->
+<dialog id="edit_modal" class="modal">
+    <div class="modal-box">
+        <h3 class="font-bold text-lg mb-4">Domain bearbeiten</h3>
+        <form id="edit_form" method="POST">
+            <div class="form-control mb-4">
+                <label class="label">
+                    <span class="label-text">Domain</span>
+                </label>
+                <input type="text" name="domain" id="edit_domain" class="input input-bordered" required>
+            </div>
+
+            <div class="form-control mb-4">
+                <label class="label">
+                    <span class="label-text">Kategorie</span>
+                </label>
+                <select name="category" id="edit_category" class="select select-bordered">
+                    {% for value, label in categories %}
+                    <option value="{{ value }}">{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-control mb-4">
+                <label class="label">
+                    <span class="label-text">Grund (optional)</span>
+                </label>
+                <textarea name="reason" id="edit_reason" class="textarea textarea-bordered"></textarea>
+            </div>
+
+            <div class="modal-action">
+                <button type="button" class="btn" onclick="edit_modal.close()">Abbrechen</button>
+                <button type="submit" class="btn btn-primary">Speichern</button>
+            </div>
+        </form>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+        <button>close</button>
+    </form>
+</dialog>
+
+<script>
+function openEditModal(id, domain, category, reason) {
+    document.getElementById('edit_form').action = '/blacklist/edit/' + id;
+    document.getElementById('edit_domain').value = domain;
+    document.getElementById('edit_category').value = category;
+    document.getElementById('edit_reason').value = reason;
+    edit_modal.showModal();
+}
+</script>
+{% endblock %}

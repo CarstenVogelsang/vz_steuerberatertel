@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Collector DATEV{% endblock %}
+
+{% block content %}
+<h1 class="text-3xl font-bold mb-6">Dashboard</h1>
+
+<!-- Stats Cards -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+    <!-- Blacklist Count -->
+    <div class="stat bg-base-100 rounded-box shadow">
+        <div class="stat-figure text-primary">
+            <i class="ti ti-list-check text-4xl"></i>
+        </div>
+        <div class="stat-title">Blacklist-Domains</div>
+        <div class="stat-value text-primary">{{ stats.blacklist_count }}</div>
+        <div class="stat-desc">E-Mail-Provider, Hosting, etc.</div>
+    </div>
+
+    <!-- Total Jobs -->
+    <div class="stat bg-base-100 rounded-box shadow">
+        <div class="stat-figure text-secondary">
+            <i class="ti ti-player-play text-4xl"></i>
+        </div>
+        <div class="stat-title">Jobs gesamt</div>
+        <div class="stat-value text-secondary">{{ stats.jobs_total }}</div>
+        <div class="stat-desc">Scraper + Enrichment</div>
+    </div>
+
+    <!-- Completed Jobs -->
+    <div class="stat bg-base-100 rounded-box shadow">
+        <div class="stat-figure text-success">
+            <i class="ti ti-check text-4xl"></i>
+        </div>
+        <div class="stat-title">Erfolgreich</div>
+        <div class="stat-value text-success">{{ stats.jobs_completed }}</div>
+        <div class="stat-desc">Abgeschlossene Jobs</div>
+    </div>
+
+    <!-- Failed Jobs -->
+    <div class="stat bg-base-100 rounded-box shadow">
+        <div class="stat-figure text-error">
+            <i class="ti ti-x text-4xl"></i>
+        </div>
+        <div class="stat-title">Fehlgeschlagen</div>
+        <div class="stat-value text-error">{{ stats.jobs_failed }}</div>
+        <div class="stat-desc">Jobs mit Fehler</div>
+    </div>
+</div>
+
+<!-- Running Job -->
+{% if running_job %}
+<div class="card bg-base-100 shadow-xl mb-8">
+    <div class="card-body">
+        <h2 class="card-title">
+            <span class="loading loading-spinner loading-sm"></span>
+            Laufender Job: {{ running_job.job_type }}
+        </h2>
+        <p class="text-sm text-base-content/70">
+            Gestartet: {{ running_job.started_at.strftime('%d.%m.%Y %H:%M:%S') if running_job.started_at else '-' }}
+        </p>
+        <div class="card-actions justify-end">
+            <a href="{{ url_for('jobs.detail', job_id=running_job.id) }}" class="btn btn-primary btn-sm">
+                <i class="ti ti-eye"></i>
+                Details anzeigen
+            </a>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Recent Jobs -->
+<div class="card bg-base-100 shadow-xl">
+    <div class="card-body">
+        <h2 class="card-title mb-4">
+            <i class="ti ti-history"></i>
+            Letzte Jobs
+        </h2>
+
+        {% if recent_jobs %}
+        <div class="overflow-x-auto">
+            <table class="table table-zebra">
+                <thead>
+                    <tr>
+                        <th>Typ</th>
+                        <th>Status</th>
+                        <th>Gestartet</th>
+                        <th>Dauer</th>
+                        <th>Aktion</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for job in recent_jobs %}
+                    <tr>
+                        <td>{{ job.job_type }}</td>
+                        <td>
+                            {% if job.status == 'completed' %}
+                            <span class="badge badge-success gap-1">
+                                <i class="ti ti-check"></i> Erfolgreich
+                            </span>
+                            {% elif job.status == 'failed' %}
+                            <span class="badge badge-error gap-1">
+                                <i class="ti ti-x"></i> Fehlgeschlagen
+                            </span>
+                            {% elif job.status == 'running' %}
+                            <span class="badge badge-info gap-1">
+                                <span class="loading loading-spinner loading-xs"></span> Läuft
+                            </span>
+                            {% elif job.status == 'cancelled' %}
+                            <span class="badge badge-warning gap-1">
+                                <i class="ti ti-player-stop"></i> Abgebrochen
+                            </span>
+                            {% else %}
+                            <span class="badge badge-ghost">{{ job.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ job.started_at.strftime('%d.%m.%Y %H:%M') if job.started_at else '-' }}</td>
+                        <td>{{ job.duration_formatted }}</td>
+                        <td>
+                            <a href="{{ url_for('jobs.detail', job_id=job.id) }}" class="btn btn-ghost btn-xs">
+                                <i class="ti ti-eye"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-base-content/50">Noch keine Jobs ausgeführt.</p>
+        {% endif %}
+
+        <div class="card-actions justify-end mt-4">
+            <a href="{{ url_for('jobs.index') }}" class="btn btn-outline btn-sm">
+                Alle Jobs anzeigen
+                <i class="ti ti-arrow-right"></i>
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

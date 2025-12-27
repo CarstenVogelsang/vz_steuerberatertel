@@ -1,0 +1,318 @@
+{% extends "base.html" %}
+
+{% block title %}Jobs - Collector DATEV{% endblock %}
+
+{% block content %}
+<div class="flex justify-between items-center mb-6">
+    <h1 class="text-3xl font-bold">Jobs</h1>
+    <button class="btn btn-primary" onclick="new_job_modal.showModal()" {% if running_job %}disabled{% endif %}>
+        <i class="ti ti-plus"></i>
+        Neuer Job
+    </button>
+</div>
+
+<!-- Running Job -->
+{% if running_job %}
+<div class="card bg-base-100 shadow-xl mb-6">
+    <div class="card-body">
+        <div class="flex justify-between items-start">
+            <div>
+                <h2 class="card-title">
+                    <span class="loading loading-spinner loading-sm text-primary"></span>
+                    {{ running_job.job_type }}
+                </h2>
+                <p class="text-sm text-base-content/70">
+                    Gestartet: {{ running_job.started_at.strftime('%H:%M:%S') if running_job.started_at else '-' }}
+                </p>
+            </div>
+            <form hx-delete="/api/jobs/{{ running_job.id }}"
+                  hx-confirm="Job wirklich abbrechen?"
+                  hx-swap="none">
+                <button class="btn btn-outline btn-error btn-sm">
+                    <i class="ti ti-player-stop"></i>
+                    Abbrechen
+                </button>
+            </form>
+        </div>
+
+        <!-- Live Log Output -->
+        <div class="mockup-code bg-base-300 max-h-96 overflow-y-auto mt-4" id="live-log-output"
+             hx-ext="sse"
+             sse-connect="/jobs/stream/{{ running_job.id }}"
+             sse-swap="message"
+             hx-swap="beforeend">
+            <pre data-prefix=">"><code>Verbinde...</code></pre>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Recent Jobs -->
+<div class="card bg-base-100 shadow-xl">
+    <div class="card-body">
+        <h2 class="card-title mb-4">
+            <i class="ti ti-history"></i>
+            Job-Verlauf
+        </h2>
+
+        {% if recent_jobs %}
+        <div class="overflow-x-auto">
+            <table class="table table-zebra">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Typ</th>
+                        <th>Status</th>
+                        <th>Gestartet</th>
+                        <th>Dauer</th>
+                        <th>Aktion</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for job in recent_jobs %}
+                    <tr>
+                        <td>#{{ job.id }}</td>
+                        <td>{{ job.job_type }}</td>
+                        <td>
+                            {% if job.status == 'completed' %}
+                            <span class="badge badge-success gap-1">
+                                <i class="ti ti-check"></i> Erfolgreich
+                            </span>
+                            {% elif job.status == 'failed' %}
+                            <span class="badge badge-error gap-1">
+                                <i class="ti ti-x"></i> Fehlgeschlagen
+                            </span>
+                            {% elif job.status == 'running' %}
+                            <span class="badge badge-info gap-1">
+                                <span class="loading loading-spinner loading-xs"></span> Läuft
+                            </span>
+                            {% elif job.status == 'cancelled' %}
+                            <span class="badge badge-warning gap-1">
+                                <i class="ti ti-player-stop"></i> Abgebrochen
+                            </span>
+                            {% elif job.status == 'pending' %}
+                            <span class="badge badge-ghost gap-1">
+                                <i class="ti ti-clock"></i> Wartend
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td>{{ job.started_at.strftime('%d.%m.%Y %H:%M') if job.started_at else '-' }}</td>
+                        <td>{{ job.duration_formatted }}</td>
+                        <td>
+                            <a href="{{ url_for('jobs.detail', job_id=job.id) }}" class="btn btn-ghost btn-sm">
+                                <i class="ti ti-eye"></i>
+                                Logs
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-base-content/50">Noch keine Jobs ausgeführt.</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- New Job Modal -->
+<dialog id="new_job_modal" class="modal">
+    <div class="modal-box w-11/12 max-w-2xl">
+        <h3 class="font-bold text-lg mb-4">Neuen Job starten</h3>
+
+        <form id="new_job_form">
+            <!-- Job Type Selection -->
+            <div class="form-control mb-6">
+                <label class="label">
+                    <span class="label-text font-semibold">Job-Typ</span>
+                </label>
+                {% for value, label in job_types %}
+                <label class="label cursor-pointer gap-4 border rounded-lg p-4 hover:bg-base-200 mb-2">
+                    <div class="flex items-center gap-3">
+                        <input type="radio" name="job_type" value="{{ value }}"
+                               class="radio radio-primary"
+                               {% if loop.first %}checked{% endif %}
+                               onchange="updateJobParameters()">
+                        <div>
+                            <span class="font-semibold">{{ label }}</span>
+                        </div>
+                    </div>
+                </label>
+                {% endfor %}
+            </div>
+
+            <!-- Parameters Section -->
+            <div id="job-parameters" class="border-t pt-4">
+                <h4 class="font-semibold mb-4">Parameter</h4>
+
+                <!-- PLZ Filter -->
+                <div class="form-control mb-4">
+                    <label class="label">
+                        <span class="label-text">PLZ-Filter</span>
+                    </label>
+                    <input type="text" name="plz_filter" placeholder="z.B. 4 für PLZ 40000-49999"
+                           class="input input-bordered">
+                    <label class="label">
+                        <span class="label-text-alt">Leer = alle PLZ</span>
+                    </label>
+                </div>
+
+                <!-- Confidence Filter (for enrich_search) -->
+                <div id="confidence-options" class="form-control mb-4">
+                    <label class="label">
+                        <span class="label-text">Confidence-Level</span>
+                    </label>
+                    <div class="flex flex-wrap gap-4">
+                        <label class="label cursor-pointer gap-2">
+                            <input type="checkbox" name="confidence_none" class="checkbox checkbox-sm" checked>
+                            <span class="label-text">Keine Website</span>
+                        </label>
+                        <label class="label cursor-pointer gap-2">
+                            <input type="checkbox" name="confidence_low" class="checkbox checkbox-sm" checked>
+                            <span class="label-text">Niedrig</span>
+                        </label>
+                        <label class="label cursor-pointer gap-2">
+                            <input type="checkbox" name="confidence_medium" class="checkbox checkbox-sm">
+                            <span class="label-text">Mittel</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Search Provider (for enrich_search) -->
+                <div id="provider-options" class="form-control mb-4">
+                    <label class="label">
+                        <span class="label-text">Such-Provider</span>
+                    </label>
+                    <select name="search_provider" class="select select-bordered">
+                        <option value="brave">Brave Search (2.000 free/Monat)</option>
+                        <option value="serper">Serper (2.500 free/Monat)</option>
+                        <option value="duckduckgo">DuckDuckGo (kostenlos, instabil)</option>
+                        <option value="serpapi">SerpAPI (kostenpflichtig)</option>
+                    </select>
+                </div>
+
+                <!-- Options -->
+                <div class="form-control mb-4">
+                    <div class="flex flex-wrap gap-4">
+                        <label class="label cursor-pointer gap-2">
+                            <input type="checkbox" name="headless" class="checkbox checkbox-sm" checked>
+                            <span class="label-text">Headless Mode</span>
+                        </label>
+                        <label class="label cursor-pointer gap-2">
+                            <input type="checkbox" name="dry_run" class="checkbox checkbox-sm">
+                            <span class="label-text">Dry Run</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-action">
+                <button type="button" class="btn" onclick="new_job_modal.close()">Abbrechen</button>
+                <button type="submit" class="btn btn-primary">
+                    <i class="ti ti-player-play"></i>
+                    Job starten
+                </button>
+            </div>
+        </form>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+        <button>close</button>
+    </form>
+</dialog>
+
+<script>
+function updateJobParameters() {
+    const jobType = document.querySelector('input[name="job_type"]:checked').value;
+    const confidenceOptions = document.getElementById('confidence-options');
+    const providerOptions = document.getElementById('provider-options');
+
+    // Show/hide options based on job type
+    if (jobType === 'enrich_search') {
+        confidenceOptions.style.display = 'block';
+        providerOptions.style.display = 'block';
+    } else {
+        confidenceOptions.style.display = 'none';
+        providerOptions.style.display = 'none';
+    }
+}
+
+// Initialize on load
+document.addEventListener('DOMContentLoaded', updateJobParameters);
+
+// Handle form submission
+document.getElementById('new_job_form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const formData = new FormData(this);
+    const jobType = formData.get('job_type');
+
+    // Build parameters
+    const parameters = {
+        plz_filter: formData.get('plz_filter') || null,
+        headless: formData.get('headless') === 'on',
+        dry_run: formData.get('dry_run') === 'on',
+    };
+
+    if (jobType === 'enrich_search') {
+        const confidenceFilter = [];
+        if (formData.get('confidence_none')) confidenceFilter.push('none');
+        if (formData.get('confidence_low')) confidenceFilter.push('low');
+        if (formData.get('confidence_medium')) confidenceFilter.push('medium');
+        parameters.confidence_filter = confidenceFilter;
+        parameters.search_provider = formData.get('search_provider');
+    }
+
+    try {
+        const response = await fetch('/api/jobs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                job_type: jobType,
+                parameters: parameters
+            })
+        });
+
+        if (response.ok) {
+            new_job_modal.close();
+            window.location.reload();
+        } else {
+            const data = await response.json();
+            alert(data.error || 'Fehler beim Starten des Jobs');
+        }
+    } catch (error) {
+        alert('Fehler: ' + error.message);
+    }
+});
+
+// SSE message handler
+document.body.addEventListener('sse:message', function(e) {
+    const logOutput = document.getElementById('live-log-output');
+    if (logOutput && e.detail) {
+        try {
+            const log = JSON.parse(e.detail.data);
+            const levelClass = {
+                'INFO': 'text-info',
+                'SUCCESS': 'text-success',
+                'WARNING': 'text-warning',
+                'ERROR': 'text-error',
+                'DEBUG': 'text-base-content/50'
+            }[log.level] || '';
+
+            const pre = document.createElement('pre');
+            pre.setAttribute('data-prefix', log.timestamp);
+            pre.innerHTML = `<code class="${levelClass}">${escapeHtml(log.message)}</code>`;
+            logOutput.appendChild(pre);
+            logOutput.scrollTop = logOutput.scrollHeight;
+        } catch (err) {
+            console.error('Error parsing SSE message:', err);
+        }
+    }
+});
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+</script>
+{% endblock %}

@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+
+{% block title %}Job #{{ job.id }} - Collector DATEV{% endblock %}
+
+{% block content %}
+<div class="flex items-center gap-4 mb-6">
+    <a href="{{ url_for('jobs.index') }}" class="btn btn-ghost btn-sm">
+        <i class="ti ti-arrow-left"></i>
+    </a>
+    <h1 class="text-3xl font-bold">Job #{{ job.id }}</h1>
+</div>
+
+<!-- Job Info Card -->
+<div class="card bg-base-100 shadow-xl mb-6">
+    <div class="card-body">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div>
+                <div class="text-sm text-base-content/70">Typ</div>
+                <div class="font-semibold">{{ job.job_type }}</div>
+            </div>
+            <div>
+                <div class="text-sm text-base-content/70">Status</div>
+                <div>
+                    {% if job.status == 'completed' %}
+                    <span class="badge badge-success gap-1">
+                        <i class="ti ti-check"></i> Erfolgreich
+                    </span>
+                    {% elif job.status == 'failed' %}
+                    <span class="badge badge-error gap-1">
+                        <i class="ti ti-x"></i> Fehlgeschlagen
+                    </span>
+                    {% elif job.status == 'running' %}
+                    <span class="badge badge-info gap-1">
+                        <span class="loading loading-spinner loading-xs"></span> Läuft
+                    </span>
+                    {% elif job.status == 'cancelled' %}
+                    <span class="badge badge-warning gap-1">
+                        <i class="ti ti-player-stop"></i> Abgebrochen
+                    </span>
+                    {% else %}
+                    <span class="badge badge-ghost">{{ job.status }}</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div>
+                <div class="text-sm text-base-content/70">Gestartet</div>
+                <div class="font-semibold">
+                    {{ job.started_at.strftime('%d.%m.%Y %H:%M:%S') if job.started_at else '-' }}
+                </div>
+            </div>
+            <div>
+                <div class="text-sm text-base-content/70">Dauer</div>
+                <div class="font-semibold">{{ job.duration_formatted }}</div>
+            </div>
+        </div>
+
+        {% if job.parameters %}
+        <div class="divider"></div>
+        <div>
+            <div class="text-sm text-base-content/70 mb-2">Parameter</div>
+            <div class="flex flex-wrap gap-2">
+                {% for key, value in job.parameters.items() %}
+                <span class="badge badge-outline">{{ key }}: {{ value }}</span>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if job.error_message %}
+        <div class="divider"></div>
+        <div class="alert alert-error">
+            <i class="ti ti-alert-circle"></i>
+            <span>{{ job.error_message }}</span>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Log Output -->
+<div class="card bg-base-100 shadow-xl">
+    <div class="card-body">
+        <h2 class="card-title mb-4">
+            <i class="ti ti-terminal-2"></i>
+            Log-Ausgabe
+        </h2>
+
+        {% if job.status == 'running' %}
+        <!-- Live Log for running jobs -->
+        <div class="mockup-code bg-base-300 max-h-[600px] overflow-y-auto" id="live-log-output"
+             hx-ext="sse"
+             sse-connect="/jobs/stream/{{ job.id }}"
+             sse-swap="message"
+             hx-swap="beforeend">
+            {% for log in logs %}
+            <pre data-prefix="{{ log.timestamp.strftime('%H:%M:%S') }}"><code class="{% if log.level == 'ERROR' %}text-error{% elif log.level == 'WARNING' %}text-warning{% elif log.level == 'SUCCESS' %}text-success{% elif log.level == 'DEBUG' %}text-base-content/50{% else %}text-info{% endif %}">{{ log.message }}</code></pre>
+            {% endfor %}
+        </div>
+        {% else %}
+        <!-- Static log for completed jobs -->
+        <div class="mockup-code bg-base-300 max-h-[600px] overflow-y-auto">
+            {% for log in logs %}
+            <pre data-prefix="{{ log.timestamp.strftime('%H:%M:%S') }}"><code class="{% if log.level == 'ERROR' %}text-error{% elif log.level == 'WARNING' %}text-warning{% elif log.level == 'SUCCESS' %}text-success{% elif log.level == 'DEBUG' %}text-base-content/50{% else %}text-info{% endif %}">{{ log.message }}</code></pre>
+            {% endfor %}
+            {% if not logs %}
+            <pre data-prefix=">"><code>Keine Logs vorhanden</code></pre>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+// SSE message handler for running jobs
+document.body.addEventListener('sse:message', function(e) {
+    const logOutput = document.getElementById('live-log-output');
+    if (logOutput && e.detail) {
+        try {
+            const log = JSON.parse(e.detail.data);
+            const levelClass = {
+                'INFO': 'text-info',
+                'SUCCESS': 'text-success',
+                'WARNING': 'text-warning',
+                'ERROR': 'text-error',
+                'DEBUG': 'text-base-content/50'
+            }[log.level] || '';
+
+            const pre = document.createElement('pre');
+            pre.setAttribute('data-prefix', log.timestamp);
+            pre.innerHTML = `<code class="${levelClass}">${escapeHtml(log.message)}</code>`;
+            logOutput.appendChild(pre);
+            logOutput.scrollTop = logOutput.scrollHeight;
+        } catch (err) {
+            console.error('Error parsing SSE message:', err);
+        }
+    }
+});
+
+// Handle job completion
+document.body.addEventListener('sse:done', function(e) {
+    setTimeout(() => window.location.reload(), 1000);
+});
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+</script>
+{% endblock %}

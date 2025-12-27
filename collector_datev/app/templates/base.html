@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Collector DATEV{% endblock %}</title>
+
+    <!-- Tailwind CSS + daisyUI (CDN for development) -->
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.14/dist/full.min.css" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- HTMX -->
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/sse.js"></script>
+
+    <!-- Simple-DataTables -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/simple-datatables@9.0.0/dist/style.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/simple-datatables@9.0.0" defer></script>
+
+    <!-- Tabler Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.5.0/dist/tabler-icons.min.css">
+
+    {% block head %}{% endblock %}
+</head>
+<body class="min-h-screen bg-base-200">
+    <!-- Navbar -->
+    <div class="navbar bg-base-100 shadow-lg">
+        <div class="flex-1">
+            <a href="{{ url_for('dashboard.index') }}" class="btn btn-ghost text-xl">
+                <i class="ti ti-database text-primary"></i>
+                Collector DATEV
+            </a>
+        </div>
+        <div class="flex-none">
+            <ul class="menu menu-horizontal px-1">
+                <li>
+                    <a href="{{ url_for('dashboard.index') }}" class="{% if request.endpoint == 'dashboard.index' %}active{% endif %}">
+                        <i class="ti ti-dashboard"></i>
+                        Dashboard
+                    </a>
+                </li>
+                <li>
+                    <a href="{{ url_for('blacklist.index') }}" class="{% if request.endpoint and request.endpoint.startswith('blacklist') %}active{% endif %}">
+                        <i class="ti ti-list-check"></i>
+                        Blacklist
+                    </a>
+                </li>
+                <li>
+                    <a href="{{ url_for('jobs.index') }}" class="{% if request.endpoint and request.endpoint.startswith('jobs') %}active{% endif %}">
+                        <i class="ti ti-player-play"></i>
+                        Jobs
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Flash Messages -->
+    <div class="container mx-auto px-4 mt-4">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'success' if category == 'success' else 'error' if category == 'error' else 'warning' if category == 'warning' else 'info' }} mb-4">
+                        <i class="ti ti-{{ 'check' if category == 'success' else 'x' if category == 'error' else 'alert-triangle' if category == 'warning' else 'info-circle' }}"></i>
+                        <span>{{ message }}</span>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+    </div>
+
+    <!-- Main Content -->
+    <main class="container mx-auto px-4 py-6">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer footer-center p-4 bg-base-100 text-base-content mt-auto">
+        <aside>
+            <p>Collector DATEV - Steuerberater-Daten Sammlung</p>
+        </aside>
+    </footer>
+
+    <!-- Toast Container (for HTMX responses) -->
+    <div class="toast toast-end" id="toast-container"></div>
+
+    {% block scripts %}{% endblock %}
+
+    <script>
+        // Initialize Simple-DataTables on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            const tables = document.querySelectorAll('[data-datatable]');
+            tables.forEach(table => {
+                new simpleDatatables.DataTable(table, {
+                    searchable: true,
+                    sortable: true,
+                    perPage: 25,
+                    perPageSelect: [10, 25, 50, 100],
+                    labels: {
+                        placeholder: "Suchen...",
+                        perPage: "Einträge pro Seite",
+                        noRows: "Keine Einträge gefunden",
+                        info: "Zeige {start} bis {end} von {rows} Einträgen",
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>
