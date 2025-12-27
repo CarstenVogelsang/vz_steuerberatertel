@@ -1,0 +1,198 @@
+# Konsolidierte Domain-Blacklist
+# Domains die in E-Mail-Adressen und Suchergebnissen ignoriert werden
+
+# =============================================================================
+# FREEMAILER UND TELEKOMMUNIKATION
+# =============================================================================
+
+# Telekommunikation
+t-online.de
+vodafone.de
+1und1.de
+telekom.de
+
+# Deutsche Freemailer
+gmx.de
+gmx.net
+web.de
+freenet.de
+posteo.de
+arcor.de
+online.de
+
+# Internationale Freemailer
+gmail.com
+googlemail.com
+yahoo.de
+yahoo.com
+outlook.de
+outlook.com
+hotmail.de
+hotmail.com
+icloud.com
+aol.com
+aol.de
+live.de
+live.com
+msn.com
+
+# Berufsstaendische
+datev.de
+datevnet.de
+
+# =============================================================================
+# VERZEICHNISSE UND PORTALE
+# =============================================================================
+
+# Steuerberater-Verzeichnisse
+steuerberater.de
+steuerberaterverzeichnis.de
+steuerberater-suchservice.de
+steuerberater-tipps.de
+
+# Allgemeine Business-Verzeichnisse
+gelbeseiten.de
+11880.com
+dasoertliche.de
+meinestadt.de
+branchenbuch.de
+business-branchenbuch.de
+golocal.de
+yelp.de
+yelp.com
+cylex.de
+web2.cylex.de
+hotfrog.de
+unternehmensverzeichnis.org
+firmenwissen.de
+northdata.de
+companyhouse.de
+bundesanzeiger.de
+creditreform.de
+firmeneintrag.creditreform.de
+firmania.de
+bizdb.de
+kompany.de
+city-advisor.de
+vgsd.de
+hwnw.de
+
+# =============================================================================
+# KARTEN UND NAVIGATION
+# =============================================================================
+
+google.com/maps
+google.de/maps
+maps.google.com
+maps.google.de
+bing.com/maps
+
+# =============================================================================
+# SOCIAL MEDIA
+# =============================================================================
+
+facebook.com
+linkedin.com
+xing.com
+twitter.com
+instagram.com
+
+# =============================================================================
+# BEWERTUNGSPORTALE
+# =============================================================================
+
+kununu.com
+trustpilot.de
+trustpilot.com
+provenexpert.com
+
+# =============================================================================
+# JOB-PORTALE
+# =============================================================================
+
+indeed.de
+indeed.com
+stepstone.de
+xing.com/jobs
+
+# =============================================================================
+# COMMUNITY UND FOREN
+# =============================================================================
+
+reddit.com
+quora.com
+gutefrage.net
+wer-weiss-was.de
+zhihu.com
+
+# =============================================================================
+# WIKIS UND LEXIKA
+# =============================================================================
+
+wikipedia.org
+wikipedia.de
+de.wikipedia.org
+en.wikipedia.org
+wikidata.org
+
+# =============================================================================
+# VIDEO-PLATTFORMEN
+# =============================================================================
+
+youtube.com
+vimeo.com
+dailymotion.com
+
+# =============================================================================
+# NEWS UND MAGAZINE
+# =============================================================================
+
+spiegel.de
+zeit.de
+faz.net
+sueddeutsche.de
+handelsblatt.com
+wiwo.de
+focus.de
+bild.de
+welt.de
+
+# =============================================================================
+# E-COMMERCE
+# =============================================================================
+
+amazon.de
+amazon.com
+ebay.de
+ebay.com
+
+# =============================================================================
+# SPAM UND IRRELEVANTE DOMAINS
+# =============================================================================
+
+baidu.com
+zhidao.baidu.com
+ambebi.ge
+canva.com
+canva.cn
+play.google.com
+apps.microsoft.com
+account.idm.telekom.com
+
+# =============================================================================
+# AUSLAENDISCHE TLDs (werden als Suffix geprueft)
+# =============================================================================
+
+.cn
+.ru
+.ge
+.kr
+.jp
+
+# =============================================================================
+# UNSORTIERT (neue Eintraege hier)
+# =============================================================================
+
+
+online-handelsregister.de
+steuer-berater.de
