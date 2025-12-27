@@ -4,11 +4,20 @@
 
 {% block content %}
 <div class="flex justify-between items-center mb-6">
-    <h1 class="text-3xl font-bold">Domain Blacklist</h1>
-    <button class="btn btn-primary" onclick="add_modal.showModal()">
-        <i class="ti ti-plus"></i>
-        Domain hinzufügen
-    </button>
+    <div>
+        <h1 class="text-3xl font-bold">Domain Blacklist</h1>
+        <p class="text-base-content/70 mt-1">{{ domains | length }} Domains in {{ categories | length }} Kategorien</p>
+    </div>
+    <div class="flex gap-2">
+        <a href="{{ url_for('blacklist.categories') }}" class="btn btn-outline">
+            <i class="ti ti-category"></i>
+            Kategorien verwalten
+        </a>
+        <button class="btn btn-primary" onclick="add_modal.showModal()">
+            <i class="ti ti-plus"></i>
+            Domain hinzufügen
+        </button>
+    </div>
 </div>
 
 <!-- Domains Table -->
@@ -30,14 +39,16 @@
                     <tr>
                         <td class="font-mono">{{ domain.domain }}</td>
                         <td>
-                            <span class="badge badge-outline">{{ domain.category }}</span>
+                            <span class="badge badge-{{ domain.category_color }} gap-1">
+                                {{ domain.category_name }}
+                            </span>
                         </td>
                         <td class="max-w-xs truncate">{{ domain.reason or '-' }}</td>
                         <td>{{ domain.created_at.strftime('%d.%m.%Y') if domain.created_at else '-' }}</td>
                         <td>
                             <div class="join">
                                 <button class="btn btn-ghost btn-xs join-item"
-                                        onclick="openEditModal({{ domain.id }}, '{{ domain.domain }}', '{{ domain.category }}', '{{ domain.reason or '' }}')">
+                                        onclick="openEditModal({{ domain.id }}, '{{ domain.domain }}', {{ domain.category_id or 'null' }}, '{{ domain.reason or '' }}')">
                                     <i class="ti ti-edit"></i>
                                 </button>
                                 <form action="{{ url_for('blacklist.delete', domain_id=domain.id) }}"
@@ -73,9 +84,10 @@
                 <label class="label">
                     <span class="label-text">Kategorie</span>
                 </label>
-                <select name="category" class="select select-bordered">
-                    {% for value, label in categories %}
-                    <option value="{{ value }}">{{ label }}</option>
+                <select name="category_id" class="select select-bordered">
+                    <option value="">-- Keine Kategorie --</option>
+                    {% for cat in categories %}
+                    <option value="{{ cat.id }}">{{ cat.name }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -114,9 +126,10 @@
                 <label class="label">
                     <span class="label-text">Kategorie</span>
                 </label>
-                <select name="category" id="edit_category" class="select select-bordered">
-                    {% for value, label in categories %}
-                    <option value="{{ value }}">{{ label }}</option>
+                <select name="category_id" id="edit_category_id" class="select select-bordered">
+                    <option value="">-- Keine Kategorie --</option>
+                    {% for cat in categories %}
+                    <option value="{{ cat.id }}">{{ cat.name }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -140,10 +153,10 @@
 </dialog>
 
 <script>
-function openEditModal(id, domain, category, reason) {
+function openEditModal(id, domain, categoryId, reason) {
     document.getElementById('edit_form').action = '/blacklist/edit/' + id;
     document.getElementById('edit_domain').value = domain;
-    document.getElementById('edit_category').value = category;
+    document.getElementById('edit_category_id').value = categoryId || '';
     document.getElementById('edit_reason').value = reason;
     edit_modal.showModal();
 }

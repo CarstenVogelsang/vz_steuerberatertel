@@ -18,28 +18,40 @@ class Domain(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     domain = db.Column(db.String(255), unique=True, nullable=False, index=True)
-    category = db.Column(db.String(50), default="unsortiert", index=True)
+    category_id = db.Column(db.Integer, db.ForeignKey("categories.id"), nullable=True, index=True)
     reason = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     created_by = db.Column(db.String(100), default="system")
 
-    # Valid categories
-    CATEGORIES = [
-        ("email-provider", "E-Mail Provider"),
-        ("hosting", "Hosting Provider"),
-        ("verzeichnis", "Steuerberater-Verzeichnisse"),
-        ("unsortiert", "Unsortiert"),
-    ]
+    # Relationship to category
+    category_rel = db.relationship("Category", back_populates="domains")
 
     def __repr__(self) -> str:
         return f"<Domain {self.domain}>"
+
+    @property
+    def category_name(self) -> str:
+        """Get category name or 'Unsortiert' if no category."""
+        return self.category_rel.name if self.category_rel else "Unsortiert"
+
+    @property
+    def category_slug(self) -> str:
+        """Get category slug or 'unsortiert' if no category."""
+        return self.category_rel.slug if self.category_rel else "unsortiert"
+
+    @property
+    def category_color(self) -> str:
+        """Get category badge color."""
+        return self.category_rel.color if self.category_rel else "ghost"
 
     def to_dict(self) -> dict:
         """Convert to dictionary for JSON serialization."""
         return {
             "id": self.id,
             "domain": self.domain,
-            "category": self.category,
+            "category_id": self.category_id,
+            "category_name": self.category_name,
+            "category_slug": self.category_slug,
             "reason": self.reason,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "created_by": self.created_by,

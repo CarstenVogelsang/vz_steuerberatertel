@@ -1,21 +1,30 @@
 """Blacklist Blueprint.
 
-CRUD operations for domain blacklist management.
+CRUD operations for domain blacklist and category management.
 """
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 
 from app import db
-from app.models import Domain
+from app.models import Domain, Category
 
 blacklist_bp = Blueprint("blacklist", __name__, url_prefix="/blacklist")
 
 
+# ============================================================================
+# Domain Routes
+# ============================================================================
+
 @blacklist_bp.route("/")
 def index():
     """List all blacklisted domains."""
-    domains = Domain.query.order_by(Domain.category, Domain.domain).all()
-    categories = Domain.CATEGORIES
+    domains = (
+        Domain.query
+        .outerjoin(Category)
+        .order_by(Category.sort_order, Domain.domain)
+        .all()
+    )
+    categories = Category.query.order_by(Category.sort_order).all()
     return render_template(
         "blacklist/index.html",
         domains=domains,
@@ -27,7 +36,7 @@ def index():
 def add():
     """Add a new domain to the blacklist."""
     domain = request.form.get("domain", "").strip().lower()
-    category = request.form.get("category", "unsortiert")
+    category_id = request.form.get("category_id", type=int)
     reason = request.form.get("reason", "").strip()
 
     if not domain:
@@ -43,7 +52,7 @@ def add():
     # Create new domain entry
     new_domain = Domain(
         domain=domain,
-        category=category,
+        category_id=category_id,
         reason=reason,
         created_by="web-ui",
     )
@@ -63,7 +72,7 @@ def edit(domain_id: int):
     domain_entry = Domain.query.get_or_404(domain_id)
 
     domain_entry.domain = request.form.get("domain", domain_entry.domain).strip().lower()
-    domain_entry.category = request.form.get("category", domain_entry.category)
+    domain_entry.category_id = request.form.get("category_id", type=int)
     domain_entry.reason = request.form.get("reason", "").strip()
 
     db.session.commit()
@@ -91,6 +100,102 @@ def delete(domain_id: int):
     return redirect(url_for("blacklist.index"))
 
 
+# ============================================================================
+# Category Routes
+# ============================================================================
+
+@blacklist_bp.route("/categories")
+def categories():
+    """List all categories."""
+    categories = Category.query.order_by(Category.sort_order).all()
+    return render_template(
+        "blacklist/categories.html",
+        categories=categories,
+        badge_colors=Category.BADGE_COLORS,
+    )
+
+
+@blacklist_bp.route("/categories/add", methods=["POST"])
+def add_category():
+    """Add a new category."""
+    slug = request.form.get("slug", "").strip().lower().replace(" ", "-")
+    name = request.form.get("name", "").strip()
+    description = request.form.get("description", "").strip()
+    color = request.form.get("color", "ghost")
+    sort_order = request.form.get("sort_order", 0, type=int)
+
+    if not slug or not name:
+        flash("Slug und Name sind Pflichtfelder.", "error")
+        return redirect(url_for("blacklist.categories"))
+
+    # Check if slug already exists
+    existing = Category.query.filter_by(slug=slug).first()
+    if existing:
+        flash(f"Kategorie mit Slug '{slug}' existiert bereits.", "warning")
+        return redirect(url_for("blacklist.categories"))
+
+    new_category = Category(
+        slug=slug,
+        name=name,
+        description=description,
+        color=color,
+        sort_order=sort_order,
+    )
+    db.session.add(new_category)
+    db.session.commit()
+
+    flash(f"Kategorie '{name}' erstellt.", "success")
+    return redirect(url_for("blacklist.categories"))
+
+
+@blacklist_bp.route("/categories/edit/<int:category_id>", methods=["POST"])
+def edit_category(category_id: int):
+    """Edit an existing category."""
+    category = Category.query.get_or_404(category_id)
+
+    category.slug = request.form.get("slug", category.slug).strip().lower().replace(" ", "-")
+    category.name = request.form.get("name", category.name).strip()
+    category.description = request.form.get("description", "").strip()
+    category.color = request.form.get("color", category.color)
+    category.sort_order = request.form.get("sort_order", category.sort_order, type=int)
+
+    db.session.commit()
+
+    # Re-export blacklist with updated category names
+    _export_blacklist_to_txt()
+
+    flash(f"Kategorie '{category.name}' aktualisiert.", "success")
+    return redirect(url_for("blacklist.categories"))
+
+
+@blacklist_bp.route("/categories/delete/<int:category_id>", methods=["POST"])
+def delete_category(category_id: int):
+    """Delete a category and move its domains to 'unsortiert'."""
+    category = Category.query.get_or_404(category_id)
+
+    if category.slug == "unsortiert":
+        flash("Die Kategorie 'Unsortiert' kann nicht gelöscht werden.", "error")
+        return redirect(url_for("blacklist.categories"))
+
+    category_name = category.name
+
+    # Move all domains to unsortiert (or null)
+    Domain.query.filter_by(category_id=category.id).update({"category_id": None})
+
+    db.session.delete(category)
+    db.session.commit()
+
+    # Re-export blacklist
+    _export_blacklist_to_txt()
+
+    flash(f"Kategorie '{category_name}' gelöscht. Domains wurden zu 'Unsortiert' verschoben.", "success")
+    return redirect(url_for("blacklist.categories"))
+
+
+# ============================================================================
+# Helper Functions
+# ============================================================================
+
 def _export_blacklist_to_txt():
     """Export blacklist to domain_blacklist.txt after each change."""
     from pathlib import Path
@@ -99,14 +204,22 @@ def _export_blacklist_to_txt():
     data_dir = current_app.config["PROJECT_ROOT"] / "data"
     filepath = data_dir / "domain_blacklist.txt"
 
-    domains = Domain.query.order_by(Domain.category, Domain.domain).all()
+    # Get all domains ordered by category and domain name
+    domains = (
+        Domain.query
+        .outerjoin(Category)
+        .order_by(Category.sort_order, Domain.domain)
+        .all()
+    )
 
     with open(filepath, "w") as f:
-        current_category = None
+        current_category_id = -1  # Sentinel to detect first category
         for domain in domains:
-            if domain.category != current_category:
-                if current_category is not None:
+            cat_id = domain.category_id or 0
+            if cat_id != current_category_id:
+                if current_category_id != -1:
                     f.write("\n")
-                f.write(f"# {domain.category.title()}\n")
-                current_category = domain.category
+                category_name = domain.category_slug if domain.category_rel else "unsortiert"
+                f.write(f"# {category_name}\n")
+                current_category_id = cat_id
             f.write(f"{domain.domain}\n")

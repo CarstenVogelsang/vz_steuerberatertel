@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+
+{% block title %}Kategorien - Collector DATEV{% endblock %}
+
+{% block content %}
+<div class="flex items-center gap-4 mb-6">
+    <a href="{{ url_for('blacklist.index') }}" class="btn btn-ghost btn-sm">
+        <i class="ti ti-arrow-left"></i>
+    </a>
+    <div class="flex-1">
+        <h1 class="text-3xl font-bold">Kategorien verwalten</h1>
+        <p class="text-base-content/70 mt-1">{{ categories | length }} Kategorien definiert</p>
+    </div>
+    <button class="btn btn-primary" onclick="add_modal.showModal()">
+        <i class="ti ti-plus"></i>
+        Kategorie hinzufügen
+    </button>
+</div>
+
+<!-- Categories Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    {% for cat in categories %}
+    <div class="card bg-base-100 shadow-xl">
+        <div class="card-body">
+            <div class="flex justify-between items-start">
+                <div>
+                    <h2 class="card-title">
+                        <span class="badge badge-{{ cat.color }}">{{ cat.name }}</span>
+                    </h2>
+                    <p class="text-sm text-base-content/70 font-mono">{{ cat.slug }}</p>
+                </div>
+                <div class="badge badge-ghost">{{ cat.domain_count }} Domains</div>
+            </div>
+
+            {% if cat.description %}
+            <p class="text-sm mt-2">{{ cat.description }}</p>
+            {% endif %}
+
+            <div class="flex items-center gap-2 mt-2 text-sm text-base-content/50">
+                <i class="ti ti-sort-ascending-numbers"></i>
+                Sortierung: {{ cat.sort_order }}
+            </div>
+
+            <div class="card-actions justify-end mt-4">
+                <button class="btn btn-ghost btn-sm"
+                        onclick="openEditModal({{ cat.id }}, '{{ cat.slug }}', '{{ cat.name }}', '{{ cat.description or '' }}', '{{ cat.color }}', {{ cat.sort_order }})">
+                    <i class="ti ti-edit"></i>
+                    Bearbeiten
+                </button>
+                {% if cat.slug != 'unsortiert' %}
+                <form action="{{ url_for('blacklist.delete_category', category_id=cat.id) }}"
+                      method="POST"
+                      onsubmit="return confirm('Kategorie wirklich löschen? Domains werden zu Unsortiert verschoben.')">
+                    <button type="submit" class="btn btn-ghost btn-sm text-error">
+                        <i class="ti ti-trash"></i>
+                        Löschen
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+
+    <!-- Empty State -->
+    {% if not categories %}
+    <div class="col-span-full">
+        <div class="alert">
+            <i class="ti ti-info-circle"></i>
+            <span>Noch keine Kategorien vorhanden. Erstelle deine erste Kategorie!</span>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Add Modal -->
+<dialog id="add_modal" class="modal">
+    <div class="modal-box">
+        <h3 class="font-bold text-lg mb-4">Kategorie hinzufügen</h3>
+        <form action="{{ url_for('blacklist.add_category') }}" method="POST">
+            <div class="grid grid-cols-2 gap-4">
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Slug (URL-freundlich)</span>
+                    </label>
+                    <input type="text" name="slug" placeholder="z.B. email-provider"
+                           class="input input-bordered font-mono" required
+                           pattern="[a-z0-9\-]+" title="Nur Kleinbuchstaben, Zahlen und Bindestriche">
+                </div>
+
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Name</span>
+                    </label>
+                    <input type="text" name="name" placeholder="z.B. E-Mail Provider"
+                           class="input input-bordered" required>
+                </div>
+            </div>
+
+            <div class="form-control mt-4">
+                <label class="label">
+                    <span class="label-text">Beschreibung (optional)</span>
+                </label>
+                <textarea name="description" class="textarea textarea-bordered"
+                          placeholder="Wofür wird diese Kategorie verwendet?"></textarea>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4 mt-4">
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Farbe</span>
+                    </label>
+                    <select name="color" class="select select-bordered">
+                        {% for value, label in badge_colors %}
+                        <option value="{{ value }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Sortierung</span>
+                    </label>
+                    <input type="number" name="sort_order" value="50" min="0" max="999"
+                           class="input input-bordered">
+                </div>
+            </div>
+
+            <div class="modal-action">
+                <button type="button" class="btn" onclick="add_modal.close()">Abbrechen</button>
+                <button type="submit" class="btn btn-primary">Erstellen</button>
+            </div>
+        </form>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+        <button>close</button>
+    </form>
+</dialog>
+
+<!-- Edit Modal -->
+<dialog id="edit_modal" class="modal">
+    <div class="modal-box">
+        <h3 class="font-bold text-lg mb-4">Kategorie bearbeiten</h3>
+        <form id="edit_form" method="POST">
+            <div class="grid grid-cols-2 gap-4">
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Slug (URL-freundlich)</span>
+                    </label>
+                    <input type="text" name="slug" id="edit_slug"
+                           class="input input-bordered font-mono" required
+                           pattern="[a-z0-9\-]+" title="Nur Kleinbuchstaben, Zahlen und Bindestriche">
+                </div>
+
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Name</span>
+                    </label>
+                    <input type="text" name="name" id="edit_name"
+                           class="input input-bordered" required>
+                </div>
+            </div>
+
+            <div class="form-control mt-4">
+                <label class="label">
+                    <span class="label-text">Beschreibung (optional)</span>
+                </label>
+                <textarea name="description" id="edit_description"
+                          class="textarea textarea-bordered"></textarea>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4 mt-4">
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Farbe</span>
+                    </label>
+                    <select name="color" id="edit_color" class="select select-bordered">
+                        {% for value, label in badge_colors %}
+                        <option value="{{ value }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Sortierung</span>
+                    </label>
+                    <input type="number" name="sort_order" id="edit_sort_order"
+                           min="0" max="999" class="input input-bordered">
+                </div>
+            </div>
+
+            <div class="modal-action">
+                <button type="button" class="btn" onclick="edit_modal.close()">Abbrechen</button>
+                <button type="submit" class="btn btn-primary">Speichern</button>
+            </div>
+        </form>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+        <button>close</button>
+    </form>
+</dialog>
+
+<script>
+function openEditModal(id, slug, name, description, color, sortOrder) {
+    document.getElementById('edit_form').action = '/blacklist/categories/edit/' + id;
+    document.getElementById('edit_slug').value = slug;
+    document.getElementById('edit_name').value = name;
+    document.getElementById('edit_description').value = description;
+    document.getElementById('edit_color').value = color;
+    document.getElementById('edit_sort_order').value = sortOrder;
+    edit_modal.showModal();
+}
+</script>
+{% endblock %}
