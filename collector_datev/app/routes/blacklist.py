@@ -3,7 +3,7 @@
 CRUD operations for domain blacklist and category management.
 """
 
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session
 
 from app import db
 from app.models import Domain, Category
@@ -17,18 +17,41 @@ blacklist_bp = Blueprint("blacklist", __name__, url_prefix="/blacklist")
 
 @blacklist_bp.route("/")
 def index():
-    """List all blacklisted domains."""
-    domains = (
-        Domain.query
-        .outerjoin(Category)
-        .order_by(Category.sort_order, Domain.domain)
-        .all()
-    )
+    """List all blacklisted domains with optional category filter (persisted in session)."""
+    # Check if category parameter is explicitly provided in URL
+    if "category" in request.args:
+        category_filter = request.args.get("category", type=int)
+        # Save to session (None means "Alle")
+        if category_filter:
+            session["blacklist_category_filter"] = category_filter
+        else:
+            # Explicit "Alle" click (category param present but empty/0)
+            session.pop("blacklist_category_filter", None)
+            category_filter = None
+    else:
+        # No parameter in URL - restore from session
+        category_filter = session.get("blacklist_category_filter")
+
+    # Build query with optional filter
+    query = Domain.query.outerjoin(Category)
+
+    if category_filter:
+        query = query.filter(Domain.category_id == category_filter)
+
+    domains = query.order_by(Category.sort_order, Domain.domain).all()
     categories = Category.query.order_by(Category.sort_order).all()
+
+    # Get selected category for display
+    selected_category = None
+    if category_filter:
+        selected_category = Category.query.get(category_filter)
+
     return render_template(
         "blacklist/index.html",
         domains=domains,
         categories=categories,
+        selected_category=selected_category,
+        category_filter=category_filter,
     )
 
 

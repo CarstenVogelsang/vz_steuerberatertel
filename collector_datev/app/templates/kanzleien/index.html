@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}Kanzleien & Steuerberater{% endblock %}
+
+{% block content %}
+<div class="flex justify-between items-center mb-6">
+    <div>
+        <h1 class="text-2xl font-bold">Kanzleien & Steuerberater</h1>
+        <p class="text-base-content/70">{{ kanzleien|length }} Kanzleien gefunden</p>
+    </div>
+</div>
+
+<!-- Filter Section -->
+<div class="card bg-base-100 shadow mb-6">
+    <div class="card-body py-4">
+        <form method="get" class="flex flex-wrap gap-4 items-end">
+            <!-- PLZ Filter mit Autocomplete -->
+            <div class="form-control">
+                <label class="label"><span class="label-text">PLZ-Filter</span></label>
+                <input type="text" name="plz" list="plz-list"
+                       value="{{ plz_filter }}"
+                       placeholder="z.B. 475"
+                       class="input input-bordered input-sm w-32">
+                <datalist id="plz-list">
+                    {% for plz in available_plz %}
+                    <option value="{{ plz }}">
+                    {% endfor %}
+                </datalist>
+            </div>
+
+            <!-- Name-Suche -->
+            <div class="form-control">
+                <label class="label"><span class="label-text">Name suchen</span></label>
+                <input type="text" name="q"
+                       value="{{ name_filter }}"
+                       placeholder="Kanzlei oder Steuerberater"
+                       class="input input-bordered input-sm w-64">
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-sm">
+                <i class="ti ti-search"></i> Suchen
+            </button>
+
+            {% if plz_filter or name_filter %}
+            <a href="{{ url_for('kanzleien.index') }}" class="btn btn-ghost btn-sm">
+                <i class="ti ti-x"></i> Filter zurücksetzen
+            </a>
+            {% endif %}
+        </form>
+    </div>
+</div>
+
+<!-- Gruppierte Tabelle -->
+<div class="card bg-base-100 shadow-xl">
+    <div class="card-body p-0">
+        <div class="overflow-x-auto">
+            <table class="table">
+                <thead>
+                    <tr class="bg-base-300">
+                        <th class="w-2/5">Name</th>
+                        <th>PLZ / Ort</th>
+                        <th>Telefon</th>
+                        <th>E-Mail</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for kanzlei in kanzleien %}
+                <!-- Kanzlei-Zeile (Gruppenheader) -->
+                <tr class="bg-base-200 font-semibold border-t-2 border-base-300">
+                    <td>
+                        <div class="flex items-center gap-2">
+                            <i class="ti ti-building text-primary"></i>
+                            <span>{{ kanzlei.name }}</span>
+                            {% if kanzlei.rechtsform %}
+                            <span class="badge badge-sm badge-outline">{{ kanzlei.rechtsform.kuerzel }}</span>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td>{{ kanzlei.plz }} {{ kanzlei.ort or '' }}</td>
+                    <td>{{ kanzlei.telefon or '—' }}</td>
+                    <td>
+                        {% if kanzlei.email %}
+                        <a href="mailto:{{ kanzlei.email }}" class="link link-hover text-sm">{{ kanzlei.email }}</a>
+                        {% else %}—{% endif %}
+                    </td>
+                </tr>
+
+                <!-- Steuerberater-Zeilen (eingerückt) -->
+                {% for stb in kanzlei.steuerberater %}
+                <tr class="hover">
+                    <td class="pl-10">
+                        <div class="flex items-center gap-2">
+                            <i class="ti ti-user text-base-content/40"></i>
+                            <span>{{ stb.vorname or '' }} {{ stb.nachname }}</span>
+                            {% if stb.titel %}
+                            <span class="badge badge-xs badge-ghost">{{ stb.titel }}</span>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td></td>
+                    <td class="text-sm text-base-content/70">{{ stb.mobil or '—' }}</td>
+                    <td>
+                        {% if stb.email %}
+                        <a href="mailto:{{ stb.email }}" class="link link-hover text-sm">{{ stb.email }}</a>
+                        {% else %}—{% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td class="pl-10 text-base-content/50 italic" colspan="4">
+                        Keine Steuerberater zugeordnet
+                    </td>
+                </tr>
+                {% endfor %}
+                {% else %}
+                <tr>
+                    <td colspan="4" class="text-center py-12 text-base-content/50">
+                        <i class="ti ti-search-off text-4xl mb-2 block"></i>
+                        <p>Keine Kanzleien gefunden</p>
+                        {% if plz_filter or name_filter %}
+                        <p class="text-sm mt-2">Versuche andere Suchkriterien</p>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

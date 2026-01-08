@@ -52,6 +52,31 @@ def cancel_job(job_id: int):
     return jsonify({"error": "Job konnte nicht abgebrochen werden"}), 400
 
 
+@api_bp.route("/jobs/<int:job_id>/restart", methods=["POST"])
+def restart_job(job_id: int):
+    """Restart a failed or cancelled job with original parameters.
+
+    The Excel checkpoint system ensures that already processed PLZ are skipped,
+    so the job automatically continues where it left off.
+    """
+    job = Job.query.get_or_404(job_id)
+
+    # Only failed or cancelled jobs can be restarted
+    if job.status not in ("failed", "cancelled"):
+        return jsonify({
+            "error": "Nur fehlgeschlagene oder abgebrochene Jobs können neu gestartet werden"
+        }), 400
+
+    # Check if a job is already running
+    if JobService.get_running_job():
+        return jsonify({"error": "Es läuft bereits ein Job"}), 409
+
+    # Start new job with same parameters
+    new_job = JobService.start_job(job.job_type, job.parameters or {})
+
+    return jsonify(new_job.to_dict()), 201
+
+
 @api_bp.route("/jobs/<int:job_id>/logs", methods=["GET"])
 def get_job_logs(job_id: int):
     """Get all logs for a job."""
@@ -105,3 +130,36 @@ def delete_domain(domain_id: int):
     db.session.delete(domain)
     db.session.commit()
     return jsonify({"message": "Domain gelöscht"}), 200
+
+
+# ============================================================================
+# Reset Endpoints
+# ============================================================================
+
+
+@api_bp.route("/reset/stats", methods=["GET"])
+def get_reset_stats():
+    """Get current data statistics for reset confirmation."""
+    from app.services.reset_service import ResetService
+
+    stats = ResetService.get_stats()
+    return jsonify(stats)
+
+
+@api_bp.route("/reset/full", methods=["POST"])
+def full_reset():
+    """Perform a full reset of BStBK collector data.
+
+    Request body:
+        archive: bool - If true, create backup before reset
+    """
+    from app.services.reset_service import ResetService
+
+    data = request.get_json() or {}
+    archive = data.get("archive", False)
+
+    try:
+        result = ResetService.full_reset(archive=archive)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500

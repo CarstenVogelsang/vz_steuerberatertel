@@ -3,10 +3,10 @@
 Job management and real-time log streaming via SSE.
 """
 
-import json
 import time
+from html import escape as html_escape
 
-from flask import Blueprint, render_template, request, Response, stream_with_context
+from flask import Blueprint, render_template, Response, stream_with_context
 
 from app import db
 from app.models import Job, LogEntry
@@ -36,11 +36,23 @@ def stream_logs(job_id: int):
     """SSE endpoint for live log streaming."""
 
     def generate():
+        # CSS classes for log levels (daisyUI)
+        level_classes = {
+            "INFO": "text-info",
+            "SUCCESS": "text-success",
+            "WARNING": "text-warning",
+            "ERROR": "text-error",
+            "DEBUG": "text-base-content/50",
+        }
+
         last_log_id = 0
+        heartbeat_counter = 0
+
         while True:
             job = Job.query.get(job_id)
             if not job:
-                yield f"event: error\ndata: Job nicht gefunden\n\n"
+                html = '<pre data-prefix="!"><code class="text-error">Job nicht gefunden</code></pre>'
+                yield f"data: {html}\n\n"
                 break
 
             # Get new log entries
@@ -50,19 +62,30 @@ def stream_logs(job_id: int):
             ).order_by(LogEntry.id).all()
 
             for log in new_logs:
-                data = {
-                    "id": log.id,
-                    "level": log.level,
-                    "message": log.message,
-                    "timestamp": log.timestamp.strftime("%H:%M:%S"),
-                }
-                yield f"data: {json.dumps(data)}\n\n"
+                level_class = level_classes.get(log.level, "")
+                timestamp = log.timestamp.strftime("%H:%M:%S")
+                message = html_escape(log.message)
+
+                # Send HTML that HTMX can directly insert
+                html = f'<pre data-prefix="{timestamp}"><code class="{level_class}">{message}</code></pre>'
+                yield f"data: {html}\n\n"
                 last_log_id = log.id
+                heartbeat_counter = 0  # Reset counter after sending data
 
             # Check if job is done
             if job.status in ("completed", "failed", "cancelled"):
-                yield f"event: done\ndata: {job.status}\n\n"
+                # Send final status message
+                status_class = "text-success" if job.status == "completed" else "text-error"
+                status_text = {"completed": "✓ Abgeschlossen", "failed": "✗ Fehlgeschlagen", "cancelled": "⊘ Abgebrochen"}.get(job.status, job.status)
+                html = f'<pre data-prefix="→"><code class="{status_class}">{status_text}</code></pre>'
+                yield f"data: {html}\n\n"
                 break
+
+            # Heartbeat every 15 seconds (30 * 0.5s) to keep connection alive
+            heartbeat_counter += 1
+            if heartbeat_counter >= 30:
+                yield ": heartbeat\n\n"  # SSE comment = keepalive signal
+                heartbeat_counter = 0
 
             time.sleep(0.5)  # Polling interval
 

@@ -9,7 +9,6 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from src.config import Config, load_config
-from src.excel_handler import get_progress_stats, load_pending_locations, update_plz_status
 from src.plz_filter import PlzFilter, get_sheet_index, parse_plz_filter
 from src.scraper import SteuerberaterScraper
 from src.sheets_handler import (
@@ -22,14 +21,11 @@ from src.sheets_handler import (
     open_sheet_by_plz_group,
 )
 
-DEFAULT_EXCEL_PATH = Path("data/plz_de.xlsx")
-
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Steuerberater.tel Scraper")
-    parser.add_argument("--plz-file", type=Path, help="Pfad zur PLZ CSV")
-    parser.add_argument("--excel", type=Path, nargs="?", const=DEFAULT_EXCEL_PATH, help="Excel-Modus mit PLZ-Datei")
-    parser.add_argument("--max-locations", type=int, help="Maximale Anzahl Orte (nur Excel-Modus)")
+    parser.add_argument("--plz-file", type=Path, help="Pfad zur PLZ CSV (Legacy-Modus)")
+    parser.add_argument("--max-locations", type=int, help="Maximale Anzahl Orte")
     parser.add_argument(
         "--plz-filter",
         type=str,
@@ -42,7 +38,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-plz", type=int, help="Maximale Anzahl PLZ")
     parser.add_argument("--dry-run", action="store_true", help="Nur scrapen, nichts schreiben")
     parser.add_argument("--init-headers", action="store_true", help="Header-Zeile im Sheet setzen")
-    parser.add_argument("--stats", action="store_true", help="Zeige Excel-Statistiken")
+    parser.add_argument("--stats", action="store_true", help="Zeige PLZ-Statistiken aus DB")
     return parser.parse_args()
 
 
@@ -72,11 +68,13 @@ def setup_logging(level: str) -> None:
     )
 
 
-async def run_excel_mode(args: argparse.Namespace, config: Config) -> None:
-    """Run scraper in Excel mode with status tracking."""
+async def run_db_mode(args: argparse.Namespace, config: Config) -> None:
+    """Run scraper with SQLite-based progress tracking."""
     from playwright.async_api import async_playwright
 
-    excel_path = args.excel
+    # Import PLZ handler (requires Flask app context)
+    from src.plz_handler import load_pending_locations, update_plz_status
+
     plz_filter: PlzFilter | None = None
     sheet_index: int | None = None
 
@@ -88,9 +86,9 @@ async def run_excel_mode(args: argparse.Namespace, config: Config) -> None:
         else:
             logging.info("PLZ-Filter: Bereich %s-%s", plz_filter.range_start, plz_filter.range_end)
 
-    logging.info("Excel-Modus: %s", excel_path)
+    logging.info("DB-Modus: Lade PLZ aus SQLite...")
 
-    locations = load_pending_locations(excel_path, plz_filter)
+    locations = load_pending_locations(plz_filter)
     if args.max_locations:
         locations = locations[: args.max_locations]
 
@@ -158,8 +156,8 @@ async def run_excel_mode(args: argparse.Namespace, config: Config) -> None:
                             if duplicates > 0:
                                 logging.info("    -> %s neu, %s Duplikate", added, duplicates)
 
+                        # Update PLZ status in SQLite (row_number is actually DB id)
                         update_plz_status(
-                            excel_path,
                             plz_entry.row_number,
                             added,  # Only count actually added entries
                             result.error,
@@ -174,45 +172,34 @@ async def run_excel_mode(args: argparse.Namespace, config: Config) -> None:
     logging.info("Gesamt %s Eintraege gesammelt, %s Duplikate uebersprungen", len(all_entries), total_duplicates)
 
 
+def create_app():
+    """Create Flask app for database access."""
+    from app import create_app
+    return create_app()
+
+
 def main() -> None:
     args = parse_args()
     load_dotenv()
     config = build_config(args)
     setup_logging(config.log_level)
 
-    if args.stats:
-        excel_path = args.excel or DEFAULT_EXCEL_PATH
-        stats = get_progress_stats(excel_path)
-        print(f"Excel-Statistiken fuer {excel_path}:")
-        print(f"  Gesamt PLZ:     {stats['total']}")
-        print(f"  Verarbeitet:    {stats['processed']}")
-        print(f"  Ausstehend:     {stats['pending']}")
-        print(f"  Mit Fehlern:    {stats['errors']}")
-        return
+    # Create Flask app for database access
+    app = create_app()
 
-    if args.excel:
-        asyncio.run(run_excel_mode(args, config))
-        return
+    with app.app_context():
+        if args.stats:
+            from src.plz_handler import get_progress_stats
+            stats = get_progress_stats()
+            print("PLZ-Statistiken aus Datenbank:")
+            print(f"  Gesamt PLZ:     {stats['total']}")
+            print(f"  Verarbeitet:    {stats['processed']}")
+            print(f"  Ausstehend:     {stats['pending']}")
+            print(f"  Mit Fehlern:    {stats['errors']}")
+            return
 
-    scraper = SteuerberaterScraper(config)
-    entries = asyncio.run(scraper.run())
-
-    logging.info("Gesamt %s Eintraege gesammelt", len(entries))
-
-    if args.dry_run:
-        return
-
-    client = get_client(config.credentials_path)
-    worksheet = open_sheet(client, config.sheet_url)
-
-    if args.init_headers:
-        if ensure_headers(worksheet):
-            logging.info("Header-Zeile gesetzt")
-        else:
-            logging.info("Header-Zeile bereits vorhanden")
-
-    written = append_entries(worksheet, entries)
-    logging.info("%s Eintraege in Google Sheets geschrieben", written)
+        # Default: Run in DB mode with progress tracking
+        asyncio.run(run_db_mode(args, config))
 
 
 if __name__ == "__main__":

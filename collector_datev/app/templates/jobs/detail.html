@@ -73,8 +73,67 @@
             <span>{{ job.error_message }}</span>
         </div>
         {% endif %}
+
+        {% if job.status in ('failed', 'cancelled') %}
+        <div class="card-actions justify-end mt-4">
+            <form hx-post="/api/jobs/{{ job.id }}/restart"
+                  hx-confirm="Job mit gleichen Parametern neu starten?"
+                  hx-swap="none">
+                <button class="btn btn-warning">
+                    <i class="ti ti-refresh"></i>
+                    Neu starten
+                </button>
+            </form>
+        </div>
+        {% endif %}
     </div>
 </div>
+
+<!-- AI Statistics (only shown if AI was used) -->
+{% if job.ai_requests > 0 %}
+<div class="card bg-base-100 shadow-xl mb-6">
+    <div class="card-body">
+        <h2 class="card-title">
+            <i class="ti ti-robot text-primary"></i>
+            KI-Matching Statistiken
+        </h2>
+
+        <div class="stats stats-vertical md:stats-horizontal shadow w-full">
+            <div class="stat">
+                <div class="stat-figure text-primary">
+                    <i class="ti ti-message-chatbot text-3xl"></i>
+                </div>
+                <div class="stat-title">KI-Anfragen</div>
+                <div class="stat-value text-primary">{{ job.ai_requests }}</div>
+            </div>
+
+            <div class="stat">
+                <div class="stat-figure text-secondary">
+                    <i class="ti ti-hash text-3xl"></i>
+                </div>
+                <div class="stat-title">Tokens</div>
+                <div class="stat-value text-secondary">{{ job.ai_tokens_input + job.ai_tokens_output }}</div>
+                <div class="stat-desc">{{ job.ai_tokens_input }} In / {{ job.ai_tokens_output }} Out</div>
+            </div>
+
+            <div class="stat">
+                <div class="stat-figure text-accent">
+                    <i class="ti ti-currency-dollar text-3xl"></i>
+                </div>
+                <div class="stat-title">Kosten</div>
+                <div class="stat-value text-accent">{{ job.ai_cost_formatted }}</div>
+            </div>
+        </div>
+
+        {% if job.ai_budget_exhausted %}
+        <div class="alert alert-warning mt-4">
+            <i class="ti ti-alert-triangle"></i>
+            <span>Das KI-Budget wurde während dieses Jobs erschöpft. Einige Matches wurden nur regelbasiert geprüft.</span>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
 
 <!-- Log Output -->
 <div class="card bg-base-100 shadow-xl">
@@ -145,5 +204,12 @@ function escapeHtml(text) {
     div.textContent = text;
     return div.innerHTML;
 }
+
+// Redirect to jobs list after successful restart
+document.body.addEventListener('htmx:afterRequest', function(event) {
+    if (event.detail.pathInfo.requestPath.includes('/restart') && event.detail.successful) {
+        window.location.href = '{{ url_for("jobs.index") }}';
+    }
+});
 </script>
 {% endblock %}

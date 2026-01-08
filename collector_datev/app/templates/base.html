@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Collector DATEV{% endblock %}</title>
+    <title>{% block title %}Collector Steuerberater{% endblock %}</title>
 
     <!-- Tailwind CSS + daisyUI (CDN for development) -->
     <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.14/dist/full.min.css" rel="stylesheet" type="text/css" />
@@ -28,7 +28,7 @@
         <div class="flex-1">
             <a href="{{ url_for('dashboard.index') }}" class="btn btn-ghost text-xl">
                 <i class="ti ti-database text-primary"></i>
-                Collector DATEV
+                Collector Steuerberater
             </a>
         </div>
         <div class="flex-none">
@@ -51,9 +51,66 @@
                         Jobs
                     </a>
                 </li>
+                <li>
+                    <a href="{{ url_for('kanzleien.index') }}" class="{% if request.endpoint and request.endpoint.startswith('kanzleien') %}active{% endif %}">
+                        <i class="ti ti-building"></i>
+                        Kanzleien
+                    </a>
+                </li>
+                <li>
+                    <a href="{{ url_for('settings.index') }}" class="{% if request.endpoint and request.endpoint.startswith('settings') %}active{% endif %}">
+                        <i class="ti ti-settings"></i>
+                        Einstellungen
+                    </a>
+                </li>
+                <li>
+                    <a onclick="openResetModal()" class="text-warning cursor-pointer">
+                        <i class="ti ti-trash"></i>
+                        Reset
+                    </a>
+                </li>
             </ul>
         </div>
     </div>
+
+    <!-- Reset Modal -->
+    <dialog id="reset-modal" class="modal">
+        <div class="modal-box">
+            <h3 class="font-bold text-lg text-warning">
+                <i class="ti ti-alert-triangle"></i>
+                Datenbank Reset
+            </h3>
+
+            <div id="reset-stats" class="py-4">
+                <p class="text-sm text-base-content/70 mb-4">Lade Statistiken...</p>
+            </div>
+
+            <div class="form-control mb-4">
+                <label class="label cursor-pointer justify-start gap-2">
+                    <input type="checkbox" id="archive-checkbox" class="checkbox checkbox-sm" checked>
+                    <span class="label-text">Backup vor dem Löschen erstellen</span>
+                </label>
+            </div>
+
+            <div class="alert alert-warning mb-4">
+                <i class="ti ti-alert-triangle"></i>
+                <span>Diese Aktion kann nicht rückgängig gemacht werden!</span>
+            </div>
+
+            <div class="modal-action">
+                <form method="dialog">
+                    <button class="btn">Abbrechen</button>
+                </form>
+                <button onclick="performReset()" class="btn btn-error" id="reset-confirm-btn">
+                    <i class="ti ti-trash"></i>
+                    Reset durchführen
+                </button>
+            </div>
+        </div>
+        <form method="dialog" class="modal-backdrop">
+            <button>close</button>
+        </form>
+    </dialog>
 
     <!-- Flash Messages -->
     <div class="container mx-auto px-4 mt-4">
@@ -77,7 +134,7 @@
     <!-- Footer -->
     <footer class="footer footer-center p-4 bg-base-100 text-base-content mt-auto">
         <aside>
-            <p>Collector DATEV - Steuerberater-Daten Sammlung</p>
+            <p>Collector Steuerberater - Datensammlung</p>
         </aside>
     </footer>
 
@@ -105,6 +162,110 @@
                 });
             });
         });
+
+        // Reset Modal Functions
+        async function openResetModal() {
+            const modal = document.getElementById('reset-modal');
+            const statsDiv = document.getElementById('reset-stats');
+
+            // Show modal
+            modal.showModal();
+
+            // Load stats
+            try {
+                const response = await fetch('/api/reset/stats');
+                const stats = await response.json();
+
+                statsDiv.innerHTML = `
+                    <div class="stats stats-vertical shadow w-full">
+                        <div class="stat">
+                            <div class="stat-title">Kanzleien</div>
+                            <div class="stat-value text-lg">${stats.kanzlei}</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-title">Steuerberater</div>
+                            <div class="stat-value text-lg">${stats.steuerberater}</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-title">PLZ-Einträge</div>
+                            <div class="stat-value text-lg">${stats.plz_collector}</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-title">Collect Results</div>
+                            <div class="stat-value text-lg">${stats.collect_result}</div>
+                        </div>
+                    </div>
+                    <p class="text-sm text-base-content/70 mt-4">
+                        Diese Daten werden beim Reset gelöscht.
+                    </p>
+                `;
+            } catch (error) {
+                statsDiv.innerHTML = `
+                    <div class="alert alert-error">
+                        <i class="ti ti-x"></i>
+                        <span>Fehler beim Laden der Statistiken: ${error.message}</span>
+                    </div>
+                `;
+            }
+        }
+
+        async function performReset() {
+            const archive = document.getElementById('archive-checkbox').checked;
+            const btn = document.getElementById('reset-confirm-btn');
+            const modal = document.getElementById('reset-modal');
+
+            // Disable button
+            btn.disabled = true;
+            btn.innerHTML = '<span class="loading loading-spinner loading-sm"></span> Lösche...';
+
+            try {
+                const response = await fetch('/api/reset/full', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ archive }),
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    modal.close();
+
+                    // Show success toast
+                    const toast = document.createElement('div');
+                    toast.className = 'alert alert-success';
+                    toast.innerHTML = `
+                        <i class="ti ti-check"></i>
+                        <span>Reset erfolgreich! ${result.deleted.kanzlei} Kanzleien, ${result.deleted.steuerberater} Steuerberater gelöscht.
+                        ${result.backup_path ? '<br>Backup: ' + result.backup_path : ''}</span>
+                    `;
+                    document.getElementById('toast-container').appendChild(toast);
+
+                    // Remove toast after 5 seconds
+                    setTimeout(() => toast.remove(), 5000);
+
+                    // Reload page
+                    setTimeout(() => window.location.reload(), 1000);
+                } else {
+                    throw new Error(result.error || 'Unbekannter Fehler');
+                }
+            } catch (error) {
+                // Show error
+                const toast = document.createElement('div');
+                toast.className = 'alert alert-error';
+                toast.innerHTML = `
+                    <i class="ti ti-x"></i>
+                    <span>Fehler: ${error.message}</span>
+                `;
+                document.getElementById('toast-container').appendChild(toast);
+                setTimeout(() => toast.remove(), 5000);
+
+                // Reset button
+                btn.disabled = false;
+                btn.innerHTML = '<i class="ti ti-trash"></i> Reset durchführen';
+            }
+        }
     </script>
 </body>
 </html>

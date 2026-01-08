@@ -131,7 +131,17 @@ class SteuerberaterScraper:
 
         submit_button = page.locator("input[name='btnSuch_Suchen']").first
         await submit_button.click()
-        await page.wait_for_selector("text=Zuständige Berufskammer", timeout=self.config.timeout_ms)
+
+        # Wait for EITHER results OR "no results" message
+        # This prevents 30s timeout when no results are found
+        await page.wait_for_function(
+            """() => {
+                const text = document.body.innerText;
+                return text.includes('Zuständige Berufskammer') ||
+                       text.includes('keine Ergebnisse');
+            }""",
+            timeout=self.config.timeout_ms,
+        )
 
     async def _extract_result_blocks(self, page: Page) -> list[str]:
         for selector in RESULT_SELECTORS:

@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+{% block title %}Einstellungen{% endblock %}
+
+{% block content %}
+<div class="flex justify-between items-center mb-6">
+    <div>
+        <h1 class="text-2xl font-bold">Einstellungen</h1>
+        <p class="text-base-content/70">KI-Konfiguration für Steuerberater-Kanzlei Matching</p>
+    </div>
+</div>
+
+<!-- AI Configuration Card -->
+<div class="card bg-base-100 shadow-xl">
+    <div class="card-body">
+        <h2 class="card-title">
+            <i class="ti ti-robot text-primary"></i>
+            OpenRouter KI-Integration
+        </h2>
+
+        <form method="post" action="{{ url_for('settings.update_ai') }}" class="space-y-4">
+            <!-- Enable/Disable -->
+            <div class="form-control">
+                <label class="label cursor-pointer justify-start gap-4">
+                    <input type="checkbox" name="enabled" class="toggle toggle-primary"
+                           {% if config.enabled %}checked{% endif %}>
+                    <span class="label-text font-medium">KI-Matching aktivieren</span>
+                </label>
+                <p class="text-sm text-base-content/60 ml-14">
+                    Bei unsicheren Matches (Score = 1) wird die KI zur Entscheidung befragt
+                </p>
+            </div>
+
+            <div class="divider"></div>
+
+            <!-- API Key -->
+            <div class="form-control">
+                <label class="label">
+                    <span class="label-text font-medium">OpenRouter API-Key</span>
+                    <a href="https://openrouter.ai/keys" target="_blank" class="link link-primary text-sm">
+                        <i class="ti ti-external-link"></i> Key erstellen
+                    </a>
+                </label>
+                <input type="password" name="api_key"
+                       value="{{ config.api_key_masked }}"
+                       placeholder="sk-or-v1-..."
+                       class="input input-bordered w-full max-w-md">
+                <label class="label">
+                    <span class="label-text-alt text-base-content/60">
+                        Nur ändern wenn ein neuer Key eingegeben wird
+                    </span>
+                </label>
+            </div>
+
+            <!-- Model Selection -->
+            <div class="form-control">
+                <label class="label">
+                    <span class="label-text font-medium">LLM-Modell</span>
+                </label>
+                <select name="model" class="select select-bordered w-full max-w-md">
+                    {% for model in available_models %}
+                    <option value="{{ model.id }}" {% if config.model == model.id %}selected{% endif %}>
+                        {{ model.name }} (~${{ model.cost_per_1m }}/1M Tokens)
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Custom Model (optional) -->
+            <div class="form-control">
+                <label class="label">
+                    <span class="label-text font-medium">Eigene Modell-ID (optional)</span>
+                </label>
+                <input type="text" name="custom_model"
+                       value="{{ config.custom_model or '' }}"
+                       placeholder="z.B. openai/gpt-4-turbo"
+                       class="input input-bordered w-full max-w-md">
+                <label class="label">
+                    <span class="label-text-alt text-base-content/60">
+                        Überschreibt die Auswahl oben, wenn ausgefüllt
+                    </span>
+                </label>
+            </div>
+
+            <!-- Budget Limit -->
+            <div class="form-control">
+                <label class="label">
+                    <span class="label-text font-medium">Budget-Limit (USD)</span>
+                </label>
+                <div class="join">
+                    <span class="join-item btn btn-disabled">$</span>
+                    <input type="number" name="budget_limit"
+                           value="{{ config.budget_limit }}"
+                           min="0" step="0.01"
+                           class="input input-bordered join-item w-32">
+                </div>
+                <label class="label">
+                    <span class="label-text-alt text-base-content/60">
+                        KI-Matching wird deaktiviert wenn dieses Limit erreicht ist
+                    </span>
+                </label>
+            </div>
+
+            <div class="flex gap-2 mt-6">
+                <button type="submit" class="btn btn-primary">
+                    <i class="ti ti-device-floppy"></i> Speichern
+                </button>
+                <button type="button" class="btn btn-outline"
+                        formaction="{{ url_for('settings.test_connection') }}"
+                        formmethod="post">
+                    <i class="ti ti-plug"></i> Verbindung testen
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Usage Statistics Card -->
+<div class="card bg-base-100 shadow-xl mt-6">
+    <div class="card-body">
+        <h2 class="card-title">
+            <i class="ti ti-chart-bar text-secondary"></i>
+            Nutzungsstatistiken
+        </h2>
+
+        <div class="stats stats-vertical md:stats-horizontal shadow w-full">
+            <div class="stat">
+                <div class="stat-figure text-primary">
+                    <i class="ti ti-message-chatbot text-3xl"></i>
+                </div>
+                <div class="stat-title">KI-Anfragen</div>
+                <div class="stat-value text-primary">{{ config.total_requests }}</div>
+                <div class="stat-desc">Gesamt</div>
+            </div>
+
+            <div class="stat">
+                <div class="stat-figure text-secondary">
+                    <i class="ti ti-hash text-3xl"></i>
+                </div>
+                <div class="stat-title">Tokens</div>
+                <div class="stat-value text-secondary">{{ config.total_tokens_input + config.total_tokens_output }}</div>
+                <div class="stat-desc">{{ config.total_tokens_input }} In / {{ config.total_tokens_output }} Out</div>
+            </div>
+
+            <div class="stat">
+                <div class="stat-figure text-accent">
+                    <i class="ti ti-currency-dollar text-3xl"></i>
+                </div>
+                <div class="stat-title">Verbraucht</div>
+                <div class="stat-value text-accent">${{ "%.4f"|format(config.budget_used) }}</div>
+                <div class="stat-desc">von ${{ "%.2f"|format(config.budget_limit) }} Budget</div>
+            </div>
+
+            <div class="stat">
+                <div class="stat-figure {% if config.budget_exhausted %}text-error{% else %}text-success{% endif %}">
+                    <i class="ti ti-{% if config.budget_exhausted %}alert-triangle{% else %}check{% endif %} text-3xl"></i>
+                </div>
+                <div class="stat-title">Status</div>
+                <div class="stat-value text-lg {% if config.budget_exhausted %}text-error{% else %}text-success{% endif %}">
+                    {% if config.budget_exhausted %}Erschöpft{% else %}OK{% endif %}
+                </div>
+                <div class="stat-desc">${{ "%.4f"|format(config.budget_remaining) }} verbleibend</div>
+            </div>
+        </div>
+
+        <!-- Progress Bar -->
+        <div class="mt-4">
+            <div class="flex justify-between text-sm mb-1">
+                <span>Budget-Verbrauch</span>
+                <span>{{ "%.1f"|format((config.budget_used / config.budget_limit * 100) if config.budget_limit > 0 else 0) }}%</span>
+            </div>
+            <progress class="progress {% if config.budget_exhausted %}progress-error{% elif config.budget_used / config.budget_limit > 0.8 %}progress-warning{% else %}progress-success{% endif %} w-full"
+                      value="{{ config.budget_used }}"
+                      max="{{ config.budget_limit }}"></progress>
+        </div>
+
+        <div class="flex gap-2 mt-4">
+            <form method="post" action="{{ url_for('settings.reset_budget') }}" class="inline">
+                <button type="submit" class="btn btn-outline btn-sm"
+                        onclick="return confirm('Budget-Verbrauch wirklich zurücksetzen?')">
+                    <i class="ti ti-refresh"></i> Budget zurücksetzen
+                </button>
+            </form>
+            <form method="post" action="{{ url_for('settings.reset_stats') }}" class="inline">
+                <button type="submit" class="btn btn-outline btn-warning btn-sm"
+                        onclick="return confirm('ALLE Statistiken zurücksetzen? (Anfragen, Tokens, Kosten)')">
+                    <i class="ti ti-trash"></i> Alle Statistiken zurücksetzen
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Info Card -->
+<div class="card bg-info/10 mt-6">
+    <div class="card-body">
+        <h3 class="card-title text-info">
+            <i class="ti ti-info-circle"></i>
+            Wie funktioniert KI-Matching?
+        </h3>
+        <div class="text-sm space-y-2">
+            <p>
+                Der regelbasierte Matcher prüft Steuerberater anhand von Indikatoren
+                (Name, Adresse, E-Mail-Domain). Bei <strong>Score >= 2</strong> erfolgt
+                ein automatisches Match.
+            </p>
+            <p>
+                Bei <strong>Score = 1</strong> (unsicher) wird die KI befragt:
+                Sie erhält beide Datensätze und entscheidet, ob eine Zuordnung sinnvoll ist.
+            </p>
+            <p>
+                Die KI-Nutzung verursacht Kosten. Das Budget-Limit schützt vor unerwarteten Ausgaben.
+                Wenn das Budget erschöpft ist, werden nur noch regelbasierte Matches durchgeführt.
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}

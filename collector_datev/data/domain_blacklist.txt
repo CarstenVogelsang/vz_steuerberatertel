@@ -1,198 +1,138 @@
-# Konsolidierte Domain-Blacklist
-# Domains die in E-Mail-Adressen und Suchergebnissen ignoriert werden
+# top-level-domains
+.cn
+.ge
+.jp
+.kr
+.ru
 
-# =============================================================================
-# FREEMAILER UND TELEKOMMUNIKATION
-# =============================================================================
-
-# Telekommunikation
-t-online.de
-vodafone.de
+# email--hosting-provider
 1und1.de
-telekom.de
-
-# Deutsche Freemailer
-gmx.de
-gmx.net
-web.de
-freenet.de
-posteo.de
-arcor.de
-online.de
-
-# Internationale Freemailer
-gmail.com
-googlemail.com
-yahoo.de
-yahoo.com
-outlook.de
-outlook.com
-hotmail.de
-hotmail.com
-icloud.com
+account.idm.telekom.com
 aol.com
 aol.de
-live.de
+arcor.de
+freenet.de
+gmail.com
+gmx.de
+gmx.net
+googlemail.com
+hotmail.com
+hotmail.de
+icloud.com
 live.com
+live.de
 msn.com
+online.de
+outlook.com
+outlook.de
+posteo.de
+t-online.de
+telekom.de
+vodafone.de
+web.de
+yahoo.com
+yahoo.de
 
-# Berufsstaendische
+# sonstige
+canva.cn
+canva.com
+
+# vz-steuerberater
 datev.de
 datevnet.de
-
-# =============================================================================
-# VERZEICHNISSE UND PORTALE
-# =============================================================================
-
-# Steuerberater-Verzeichnisse
-steuerberater.de
-steuerberaterverzeichnis.de
+steuer-berater.de
 steuerberater-suchservice.de
 steuerberater-tipps.de
-
-# Allgemeine Business-Verzeichnisse
-gelbeseiten.de
-11880.com
-dasoertliche.de
-meinestadt.de
-branchenbuch.de
-business-branchenbuch.de
-golocal.de
-yelp.de
-yelp.com
-cylex.de
-web2.cylex.de
-hotfrog.de
-unternehmensverzeichnis.org
-firmenwissen.de
-northdata.de
-companyhouse.de
-bundesanzeiger.de
-creditreform.de
-firmeneintrag.creditreform.de
-firmania.de
-bizdb.de
-kompany.de
-city-advisor.de
+steuerberater.de
+steuerberaterverzeichnis.de
 vgsd.de
-hwnw.de
 
-# =============================================================================
-# KARTEN UND NAVIGATION
-# =============================================================================
-
-google.com/maps
-google.de/maps
-maps.google.com
-maps.google.de
-bing.com/maps
-
-# =============================================================================
-# SOCIAL MEDIA
-# =============================================================================
-
+# social-media
+dailymotion.com
 facebook.com
-linkedin.com
-xing.com
-twitter.com
 instagram.com
-
-# =============================================================================
-# BEWERTUNGSPORTALE
-# =============================================================================
-
-kununu.com
-trustpilot.de
-trustpilot.com
-provenexpert.com
-
-# =============================================================================
-# JOB-PORTALE
-# =============================================================================
-
-indeed.de
-indeed.com
-stepstone.de
-xing.com/jobs
-
-# =============================================================================
-# COMMUNITY UND FOREN
-# =============================================================================
-
-reddit.com
+linkedin.com
 quora.com
-gutefrage.net
-wer-weiss-was.de
+reddit.com
+twitter.com
+vimeo.com
+xing.com
+xing.com/jobs
+youtube.com
 zhihu.com
 
-# =============================================================================
-# WIKIS UND LEXIKA
-# =============================================================================
-
-wikipedia.org
-wikipedia.de
-de.wikipedia.org
-en.wikipedia.org
-wikidata.org
-
-# =============================================================================
-# VIDEO-PLATTFORMEN
-# =============================================================================
-
-youtube.com
-vimeo.com
-dailymotion.com
-
-# =============================================================================
-# NEWS UND MAGAZINE
-# =============================================================================
-
-spiegel.de
-zeit.de
-faz.net
-sueddeutsche.de
-handelsblatt.com
-wiwo.de
-focus.de
+# nachrichtenportale
 bild.de
+faz.net
+focus.de
+handelsblatt.com
+spiegel.de
+sueddeutsche.de
 welt.de
+wiwo.de
+zeit.de
 
-# =============================================================================
-# E-COMMERCE
-# =============================================================================
+# verzeichnisse
+11880.com
 
-amazon.de
+# marktplaetze
 amazon.com
-ebay.de
-ebay.com
+amazon.de
 
-# =============================================================================
-# SPAM UND IRRELEVANTE DOMAINS
-# =============================================================================
-
-baidu.com
-zhidao.baidu.com
-ambebi.ge
-canva.com
-canva.cn
-play.google.com
+# verzeichnisse
 apps.microsoft.com
-account.idm.telekom.com
+baidu.com
+bing.com
+bizdb.de
+branchenbuch.de
+bundesanzeiger.de
+business-branchenbuch.de
+city-advisor.de
+companyhouse.de
+creditreform.de
+cylex.de
+dasoertliche.de
+de.wikipedia.org
 
-# =============================================================================
-# AUSLAENDISCHE TLDs (werden als Suffix geprueft)
-# =============================================================================
+# marktplaetze
+ebay.com
+ebay.de
 
-.cn
-.ru
-.ge
-.kr
-.jp
+# verzeichnisse
+en.wikipedia.org
+firmania.de
+firmeneintrag.creditreform.de
+firmenwissen.de
+gelbeseiten.de
+golocal.de
+google.com
+gutefrage.net
+hotfrog.de
 
-# =============================================================================
-# UNSORTIERT (neue Eintraege hier)
-# =============================================================================
+# vz-heilberufe
+hwnw.de
 
-
+# verzeichnisse
+indeed.com
+indeed.de
+kompany.de
+kununu.com
+maps.google.com
+maps.google.de
+meinestadt.de
+northdata.de
 online-handelsregister.de
-steuer-berater.de
+play.google.com
+provenexpert.com
+stepstone.de
+trustpilot.com
+trustpilot.de
+unternehmensverzeichnis.org
+web2.cylex.de
+wer-weiss-was.de
+wikidata.org
+wikipedia.de
+wikipedia.org
+yelp.com
+yelp.de
+zhidao.baidu.com

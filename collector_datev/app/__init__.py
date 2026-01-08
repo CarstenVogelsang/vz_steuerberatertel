@@ -90,11 +90,15 @@ def _register_blueprints(app: Flask) -> None:
     from app.routes.blacklist import blacklist_bp
     from app.routes.jobs import jobs_bp
     from app.routes.api import api_bp
+    from app.routes.kanzleien import kanzleien_bp
+    from app.routes.settings import settings_bp
 
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(blacklist_bp)
     app.register_blueprint(jobs_bp)
     app.register_blueprint(api_bp)
+    app.register_blueprint(kanzleien_bp)
+    app.register_blueprint(settings_bp)
 
 
 def _register_cli_commands(app: Flask) -> None:

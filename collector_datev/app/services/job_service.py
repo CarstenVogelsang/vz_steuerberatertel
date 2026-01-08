@@ -86,14 +86,20 @@ class JobService:
                 )
                 cls._processes[job_id] = process
 
-                # Read output line by line
-                for line in iter(process.stdout.readline, ""):
-                    line = line.rstrip()
+                # Read output line by line with process status check
+                # This is more robust for asyncio processes like Playwright
+                while True:
+                    line = process.stdout.readline()
                     if line:
-                        level = cls._parse_log_level(line)
-                        cls._add_log(job_id, level, line)
+                        line = line.rstrip()
+                        if line:
+                            level = cls._parse_log_level(line)
+                            cls._add_log(job_id, level, line)
+                    elif process.poll() is not None:
+                        # Process has terminated and no more output
+                        break
 
-                # Wait for process to complete
+                # Wait for process to complete (should be instant now)
                 process.wait()
                 exit_code = process.returncode
 
@@ -127,7 +133,8 @@ class JobService:
         base_cmd = ["uv", "run", "python", "-m"]
 
         if job_type == "scraper":
-            cmd = base_cmd + ["src.scraper"]
+            # Scraper CLI is in main.py - now uses SQLite for progress tracking
+            cmd = ["uv", "run", "python", "main.py"]
             if parameters.get("plz_filter"):
                 cmd.extend(["--plz-filter", str(parameters["plz_filter"])])
             if parameters.get("headless"):
@@ -151,6 +158,18 @@ class JobService:
                 cmd.extend(["--search-provider", parameters["search_provider"]])
             if parameters.get("headless"):
                 cmd.append("--headless")
+            if parameters.get("dry_run"):
+                cmd.append("--dry-run")
+
+        elif job_type == "collector_bstbk":
+            # BStBK Collector - Bundessteuerberaterkammer Steuerberaterverzeichnis
+            cmd = ["uv", "run", "python", "main_bstbk.py"]
+            if parameters.get("plz_filter"):
+                cmd.extend(["--plz-filter", str(parameters["plz_filter"])])
+            if parameters.get("headless"):
+                cmd.append("--headless")
+            if parameters.get("max_plz"):
+                cmd.extend(["--max-plz", str(parameters["max_plz"])])
             if parameters.get("dry_run"):
                 cmd.append("--dry-run")
 

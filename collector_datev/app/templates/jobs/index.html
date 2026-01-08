@@ -3,6 +3,14 @@
 {% block title %}Jobs - Collector DATEV{% endblock %}
 
 {% block content %}
+{# Single Source of Truth: Job descriptions defined ONCE, used in HTML and JavaScript #}
+{% set job_descriptions = {
+    'scraper': 'Durchsucht den Bundesweiten Steuerberater-Suchdienst (datev.de/kasus) nach PLZ und speichert neue Einträge in Google Sheets. Bereits vorhandene Steuerberater (gleiche PLZ+Name) werden übersprungen.',
+    'enrich_email': 'Extrahiert Website-URLs aus E-Mail-Adressen der Steuerberater (z.B. info@kanzlei.de → kanzlei.de). Schnelle Methode mit hoher Trefferquote.',
+    'enrich_search': 'Sucht per Web-Suche nach Websites für Steuerberater ohne bekannte URL. Nutzt Serper/Brave/DuckDuckGo APIs.',
+    'blacklist_sync': 'Synchronisiert die Domain-Blacklist aus der SQLite-Datenbank mit der lokalen domain_blacklist.txt Datei.'
+} %}
+
 <div class="flex justify-between items-center mb-6">
     <h1 class="text-3xl font-bold">Jobs</h1>
     <button class="btn btn-primary" onclick="new_job_modal.showModal()" {% if running_job %}disabled{% endif %}>
@@ -35,12 +43,21 @@
             </form>
         </div>
 
-        <!-- Live Log Output -->
+        <!-- Live Log Output (HTMX SSE - Server sends HTML directly) -->
+        <!-- Note: Server sends heartbeat every 15s to keep connection alive -->
+        <!-- CSS Override: daisyUI mockup-code überschreibt text-* Klassen -->
+        <style>
+            #live-log-output code.text-info { color: oklch(var(--in)) !important; }
+            #live-log-output code.text-success { color: oklch(var(--su)) !important; }
+            #live-log-output code.text-warning { color: oklch(var(--wa)) !important; }
+            #live-log-output code.text-error { color: oklch(var(--er)) !important; }
+            #live-log-output code { color: oklch(var(--bc)) !important; }
+        </style>
         <div class="mockup-code bg-base-300 max-h-96 overflow-y-auto mt-4" id="live-log-output"
              hx-ext="sse"
              sse-connect="/jobs/stream/{{ running_job.id }}"
              sse-swap="message"
-             hx-swap="beforeend">
+             hx-swap="afterbegin">
             <pre data-prefix=">"><code>Verbinde...</code></pre>
         </div>
     </div>
@@ -62,6 +79,7 @@
                     <tr>
                         <th>ID</th>
                         <th>Typ</th>
+                        <th>Parameter</th>
                         <th>Status</th>
                         <th>Gestartet</th>
                         <th>Dauer</th>
@@ -73,6 +91,26 @@
                     <tr>
                         <td>#{{ job.id }}</td>
                         <td>{{ job.job_type }}</td>
+                        <td>
+                            {% if job.parameters %}
+                            <div class="flex flex-wrap gap-1">
+                                {% if job.parameters.plz_filter %}
+                                <span class="badge badge-sm">PLZ: {{ job.parameters.plz_filter }}</span>
+                                {% endif %}
+                                {% if not job.parameters.headless %}
+                                <span class="badge badge-sm badge-ghost">sichtbar</span>
+                                {% endif %}
+                                {% if job.parameters.dry_run %}
+                                <span class="badge badge-sm badge-warning">dry-run</span>
+                                {% endif %}
+                                {% if job.parameters.search_provider %}
+                                <span class="badge badge-sm badge-outline">{{ job.parameters.search_provider }}</span>
+                                {% endif %}
+                            </div>
+                            {% else %}
+                            <span class="text-base-content/50">-</span>
+                            {% endif %}
+                        </td>
                         <td>
                             {% if job.status == 'completed' %}
                             <span class="badge badge-success gap-1">
@@ -99,10 +137,22 @@
                         <td>{{ job.started_at.strftime('%d.%m.%Y %H:%M') if job.started_at else '-' }}</td>
                         <td>{{ job.duration_formatted }}</td>
                         <td>
-                            <a href="{{ url_for('jobs.detail', job_id=job.id) }}" class="btn btn-ghost btn-sm">
-                                <i class="ti ti-eye"></i>
-                                Logs
-                            </a>
+                            <div class="flex gap-1">
+                                <a href="{{ url_for('jobs.detail', job_id=job.id) }}" class="btn btn-ghost btn-sm">
+                                    <i class="ti ti-eye"></i>
+                                    Logs
+                                </a>
+                                {% if job.status in ('failed', 'cancelled') %}
+                                <form hx-post="/api/jobs/{{ job.id }}/restart"
+                                      hx-confirm="Job mit gleichen Parametern neu starten?"
+                                      hx-swap="none"
+                                      class="inline">
+                                    <button class="btn btn-ghost btn-sm text-warning" title="Neu starten">
+                                        <i class="ti ti-refresh"></i>
+                                    </button>
+                                </form>
+                                {% endif %}
+                            </div>
                         </td>
                     </tr>
                     {% endfor %}
@@ -121,24 +171,41 @@
         <h3 class="font-bold text-lg mb-4">Neuen Job starten</h3>
 
         <form id="new_job_form">
-            <!-- Job Type Selection -->
-            <div class="form-control mb-6">
-                <label class="label">
-                    <span class="label-text font-semibold">Job-Typ</span>
-                </label>
-                {% for value, label in job_types %}
-                <label class="label cursor-pointer gap-4 border rounded-lg p-4 hover:bg-base-200 mb-2">
-                    <div class="flex items-center gap-3">
-                        <input type="radio" name="job_type" value="{{ value }}"
-                               class="radio radio-primary"
-                               {% if loop.first %}checked{% endif %}
-                               onchange="updateJobParameters()">
-                        <div>
-                            <span class="font-semibold">{{ label }}</span>
+            <!-- Job Type Selection + Description (side by side) -->
+            <div class="flex gap-6 mb-4">
+                <!-- Left: Job Types -->
+                <div class="flex-1">
+                    <label class="label">
+                        <span class="label-text font-semibold">Job-Typ</span>
+                    </label>
+                    {% for value, label in job_types %}
+                    <label class="label cursor-pointer gap-4 border rounded-lg p-4 hover:bg-base-200 mb-2 job-type-option"
+                           data-job-type="{{ value }}"
+                           onmouseenter="showJobDescription('{{ value }}')"
+                           onmouseleave="showSelectedJobDescription()">
+                        <div class="flex items-center gap-3">
+                            <input type="radio" name="job_type" value="{{ value }}"
+                                   class="radio radio-primary"
+                                   {% if loop.first %}checked{% endif %}
+                                   onchange="updateJobParameters(); showJobDescription('{{ value }}')">
+                            <div>
+                                <span class="font-semibold">{{ label }}</span>
+                            </div>
                         </div>
+                    </label>
+                    {% endfor %}
+                </div>
+
+                <!-- Right: Description (sticky) -->
+                <div class="w-72">
+                    <label class="label">
+                        <span class="label-text font-semibold">Beschreibung</span>
+                    </label>
+                    <div id="job-description" class="alert alert-info">
+                        <i class="ti ti-info-circle"></i>
+                        <span id="job-description-text">{{ job_descriptions['scraper'] }}</span>
                     </div>
-                </label>
-                {% endfor %}
+                </div>
             </div>
 
             <!-- Parameters Section -->
@@ -221,6 +288,23 @@
 </dialog>
 
 <script>
+// Single Source of Truth: Exported from Jinja template
+const JOB_DESCRIPTIONS = {{ job_descriptions | tojson }};
+
+// Show description for a specific job type (used on hover)
+function showJobDescription(jobType) {
+    const description = JOB_DESCRIPTIONS[jobType] || 'Keine Beschreibung verfügbar.';
+    document.getElementById('job-description-text').textContent = description;
+}
+
+// Show description for the currently SELECTED job (used on mouseleave)
+function showSelectedJobDescription() {
+    const selected = document.querySelector('input[name="job_type"]:checked');
+    if (selected) {
+        showJobDescription(selected.value);
+    }
+}
+
 function updateJobParameters() {
     const jobType = document.querySelector('input[name="job_type"]:checked').value;
     const confidenceOptions = document.getElementById('confidence-options');
@@ -284,35 +368,38 @@ document.getElementById('new_job_form').addEventListener('submit', async functio
     }
 });
 
-// SSE message handler
-document.body.addEventListener('sse:message', function(e) {
-    const logOutput = document.getElementById('live-log-output');
-    if (logOutput && e.detail) {
-        try {
-            const log = JSON.parse(e.detail.data);
-            const levelClass = {
-                'INFO': 'text-info',
-                'SUCCESS': 'text-success',
-                'WARNING': 'text-warning',
-                'ERROR': 'text-error',
-                'DEBUG': 'text-base-content/50'
-            }[log.level] || '';
+// Note: SSE log handling is done by HTMX (sse-swap="message")
+// Server sends pre-formatted HTML, HTMX inserts it directly
 
-            const pre = document.createElement('pre');
-            pre.setAttribute('data-prefix', log.timestamp);
-            pre.innerHTML = `<code class="${levelClass}">${escapeHtml(log.message)}</code>`;
-            logOutput.appendChild(pre);
-            logOutput.scrollTop = logOutput.scrollHeight;
-        } catch (err) {
-            console.error('Error parsing SSE message:', err);
+// Auto-reload page when job finishes (detect final status messages)
+const logOutput = document.getElementById('live-log-output');
+if (logOutput) {
+    const observer = new MutationObserver((mutations) => {
+        for (const mutation of mutations) {
+            for (const node of mutation.addedNodes) {
+                if (node.textContent) {
+                    const text = node.textContent;
+                    // Check for final status messages
+                    if (text.includes('✓ Abgeschlossen') ||
+                        text.includes('✗ Fehlgeschlagen') ||
+                        text.includes('⊘ Abgebrochen')) {
+                        // Wait 2 seconds then reload to show updated status
+                        setTimeout(() => window.location.reload(), 2000);
+                        observer.disconnect();
+                        return;
+                    }
+                }
+            }
         }
+    });
+    observer.observe(logOutput, { childList: true });
+}
+
+// Reload page after successful job restart
+document.body.addEventListener('htmx:afterRequest', function(event) {
+    if (event.detail.pathInfo.requestPath.includes('/restart') && event.detail.successful) {
+        window.location.reload();
     }
 });
-
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
 </script>
 {% endblock %}

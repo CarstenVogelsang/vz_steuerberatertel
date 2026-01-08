@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔍 BStBK Debug UI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .pulse-waiting {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+        }
+
+        /* Dark Mode (default) */
+        .card {
+            background-color: #1f2937;
+        }
+        .card-inner {
+            background-color: rgba(55, 65, 81, 0.5);
+        }
+
+        /* Light Mode Overrides */
+        body.light-mode {
+            background-color: #f3f4f6 !important;
+            color: #111827 !important;
+        }
+        body.light-mode .card {
+            background-color: #ffffff !important;
+            border: 1px solid #e5e7eb !important;
+        }
+        body.light-mode .card-inner {
+            background-color: #f9fafb !important;
+        }
+        body.light-mode .text-gray-400 {
+            color: #6b7280 !important;
+        }
+        body.light-mode .text-gray-500 {
+            color: #6b7280 !important;
+        }
+        body.light-mode .text-gray-100 {
+            color: #111827 !important;
+        }
+        body.light-mode .text-blue-300 {
+            color: #2563eb !important;
+        }
+        body.light-mode .text-blue-400 {
+            color: #2563eb !important;
+        }
+        body.light-mode input,
+        body.light-mode .input-field {
+            background-color: #ffffff !important;
+            border-color: #d1d5db !important;
+            color: #111827 !important;
+        }
+        body.light-mode input::placeholder {
+            color: #9ca3af !important;
+        }
+        body.light-mode kbd {
+            background-color: #e5e7eb !important;
+            color: #374151 !important;
+        }
+        body.light-mode .text-white {
+            color: #111827 !important;
+        }
+        body.light-mode .text-gray-300 {
+            color: #374151 !important;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen p-4">
+    <div class="max-w-4xl mx-auto">
+        <!-- Header mit Theme Toggle -->
+        <div class="mb-4 flex items-center justify-between">
+            <div>
+                <h1 class="text-2xl font-bold text-blue-400">🔍 BStBK Debug UI</h1>
+                <p class="text-gray-400 text-sm">Interaktives Debugging für den Collector</p>
+            </div>
+            <button id="theme-toggle" onclick="toggleTheme()"
+                    class="card px-3 py-2 rounded-lg hover:opacity-80 transition-opacity"
+                    title="Theme wechseln">
+                <span id="theme-icon">☀️</span>
+            </button>
+        </div>
+
+        <!-- Statistik-Karten (kompakter) -->
+        <div class="grid grid-cols-6 gap-2 mb-4">
+            <div class="card rounded-lg p-2 text-center">
+                <div id="stat-plz" class="text-lg font-bold text-blue-400">0/0</div>
+                <div class="text-xs text-gray-400">PLZ</div>
+            </div>
+            <div class="card rounded-lg p-2 text-center">
+                <div id="stat-total" class="text-lg font-bold text-white">0</div>
+                <div class="text-xs text-gray-400">Gesamt</div>
+            </div>
+            <div class="card rounded-lg p-2 text-center">
+                <div id="stat-success" class="text-lg font-bold text-green-400">0</div>
+                <div class="text-xs text-gray-400">Erfolg</div>
+            </div>
+            <div class="card rounded-lg p-2 text-center">
+                <div id="stat-skipped" class="text-lg font-bold text-yellow-400">0</div>
+                <div class="text-xs text-gray-400">Skip</div>
+            </div>
+            <div class="card rounded-lg p-2 text-center">
+                <div id="stat-errors" class="text-lg font-bold text-red-400">0</div>
+                <div class="text-xs text-gray-400">Fehler</div>
+            </div>
+            <div class="card rounded-lg p-2 text-center">
+                <div id="stat-status" class="text-sm font-bold text-gray-400">—</div>
+                <div class="text-xs text-gray-400">Status</div>
+            </div>
+        </div>
+
+        <!-- Aktuelle URL mit Öffnen-Button -->
+        <div class="card rounded-lg p-3 mb-4">
+            <div class="flex items-center justify-between gap-2">
+                <div class="flex items-center gap-2 min-w-0 flex-1">
+                    <span id="current-plz" class="bg-blue-600 text-xs px-2 py-0.5 rounded shrink-0">—</span>
+                    <code id="current-url" class="text-sm text-blue-300 truncate block">Warte auf Collector...</code>
+                </div>
+                <button onclick="openCurrentUrl()"
+                        class="bg-blue-600 hover:bg-blue-500 px-3 py-1 rounded text-sm font-medium shrink-0 transition-colors">
+                    🔗 Öffnen
+                </button>
+            </div>
+        </div>
+
+        <!-- Extrahierte Daten (kompakt) -->
+        <div class="card rounded-lg p-4 mb-4">
+            <h2 class="text-sm font-bold mb-3 flex items-center gap-2">
+                📋 Extrahierte Daten
+                <span id="entry-type" class="text-xs bg-gray-700 px-2 py-0.5 rounded hidden">Einzelperson</span>
+            </h2>
+
+            <!-- Kein Eintrag -->
+            <div id="no-data" class="text-gray-500 text-center py-8">
+                <div class="text-3xl mb-2">⏳</div>
+                <div class="text-sm">Warte auf Daten vom Collector...</div>
+            </div>
+
+            <!-- Parsing-Fehler -->
+            <div id="parse-error" class="hidden text-center py-8">
+                <div class="text-3xl mb-2">❌</div>
+                <div class="text-red-400 font-medium text-sm">Parsing fehlgeschlagen</div>
+            </div>
+
+            <!-- Daten-Container -->
+            <div id="data-container" class="hidden">
+                <!-- Kanzlei-Daten (kompakt: inline Label:Wert) -->
+                <div class="mb-4">
+                    <h3 class="text-xs font-medium text-gray-400 mb-2 uppercase tracking-wide">🏢 Kanzlei</h3>
+                    <div class="grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
+                        <div class="truncate"><span class="text-gray-400">Name:</span> <span id="kanzlei-name" class="font-medium">—</span></div>
+                        <div class="truncate"><span class="text-gray-400">Rechtsform:</span> <span id="kanzlei-rechtsform">—</span></div>
+                        <div class="truncate"><span class="text-gray-400">Adresse:</span> <span id="kanzlei-adresse">—</span></div>
+                        <div class="truncate"><span class="text-gray-400">PLZ/Ort:</span> <span id="kanzlei-plzort">—</span></div>
+                        <div class="truncate"><span class="text-gray-400">Telefon:</span> <span id="kanzlei-telefon">—</span></div>
+                        <div class="truncate"><span class="text-gray-400">E-Mail:</span> <span id="kanzlei-email">—</span></div>
+                        <div class="truncate"><span class="text-gray-400">Website:</span> <span id="kanzlei-website">—</span></div>
+                        <div class="truncate"><span class="text-gray-400">Kammer:</span> <span id="kanzlei-kammer">—</span></div>
+                    </div>
+                </div>
+
+                <!-- Steuerberater-Daten -->
+                <div>
+                    <h3 class="text-xs font-medium text-gray-400 mb-2 uppercase tracking-wide">
+                        👤 Steuerberater
+                        <span id="stb-count" class="bg-gray-600 text-xs px-1.5 py-0.5 rounded ml-1">0</span>
+                    </h3>
+                    <div id="steuerberater-list" class="space-y-2">
+                        <!-- Dynamisch gefüllt -->
+                    </div>
+                    <div id="no-steuerberater" class="text-gray-500 text-xs italic hidden">
+                        Keine Steuerberater extrahiert (Gesellschafts-Seite)
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Feedback-Bereich (kompakter) -->
+        <div class="card rounded-lg p-3 mb-4">
+            <div class="flex gap-2">
+                <input type="text" id="feedback-input"
+                       placeholder="Feedback/Notiz..."
+                       class="input-field flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500">
+                <button onclick="sendFeedback()"
+                        class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded text-sm font-medium transition-colors">
+                    📝
+                </button>
+                <a href="/api/feedback/export" class="bg-gray-700 hover:bg-gray-600 px-3 py-2 rounded text-sm transition-colors" title="Export">
+                    📥
+                </a>
+            </div>
+            <div class="mt-1 text-xs text-gray-500">
+                <span id="feedback-count">0</span> gespeichert
+            </div>
+        </div>
+
+        <!-- Aktions-Buttons -->
+        <div class="flex gap-3">
+            <button id="btn-next" onclick="sendAction('next')"
+                    class="flex-1 bg-green-600 hover:bg-green-500 disabled:bg-gray-700 disabled:cursor-not-allowed text-white py-3 px-4 rounded-lg font-bold transition-colors">
+                ✅ Weiter
+            </button>
+            <button id="btn-skip" onclick="sendAction('skip')"
+                    class="flex-1 bg-yellow-600 hover:bg-yellow-500 disabled:bg-gray-700 disabled:cursor-not-allowed text-white py-3 px-4 rounded-lg font-bold transition-colors">
+                ⏭️ Skip
+            </button>
+            <button id="btn-stop" onclick="sendAction('stop')"
+                    class="flex-1 bg-red-600 hover:bg-red-500 disabled:bg-gray-700 disabled:cursor-not-allowed text-white py-3 px-4 rounded-lg font-bold transition-colors">
+                ⏹️ Stopp
+            </button>
+        </div>
+
+        <!-- Keyboard Shortcuts -->
+        <div class="mt-3 text-center text-gray-500 text-xs">
+            <kbd class="bg-gray-700 px-1.5 py-0.5 rounded">Enter</kbd> Weiter
+            <kbd class="bg-gray-700 px-1.5 py-0.5 rounded ml-2">S</kbd> Skip
+            <kbd class="bg-gray-700 px-1.5 py-0.5 rounded ml-2">Esc</kbd> Stopp
+        </div>
+    </div>
+
+    <script>
+        let isWaiting = false;
+        let currentUrl = null;
+
+        // Theme Management
+        function toggleTheme() {
+            document.body.classList.toggle('light-mode');
+            const isLight = document.body.classList.contains('light-mode');
+            localStorage.setItem('debugui-theme', isLight ? 'light' : 'dark');
+            updateThemeIcon();
+        }
+
+        function updateThemeIcon() {
+            const isLight = document.body.classList.contains('light-mode');
+            document.getElementById('theme-icon').textContent = isLight ? '🌙' : '☀️';
+        }
+
+        // Initialize theme from localStorage
+        if (localStorage.getItem('debugui-theme') === 'light') {
+            document.body.classList.add('light-mode');
+        }
+        updateThemeIcon();
+
+        // Open current URL in new tab
+        function openCurrentUrl() {
+            if (currentUrl && currentUrl !== 'Warte auf Collector...') {
+                window.open(currentUrl, '_blank');
+            }
+        }
+
+        // Poll for updates
+        function poll() {
+            fetch('/api/current')
+                .then(r => r.json())
+                .then(data => {
+                    updateUI(data);
+                })
+                .catch(err => {
+                    console.error('Polling error:', err);
+                })
+                .finally(() => {
+                    setTimeout(poll, 300);
+                });
+        }
+
+        function updateUI(data) {
+            // Stats
+            document.getElementById('stat-plz').textContent =
+                `${data.stats.plz_current}/${data.stats.plz_total}`;
+            document.getElementById('stat-total').textContent = data.stats.total;
+            document.getElementById('stat-success').textContent = data.stats.success;
+            document.getElementById('stat-skipped').textContent = data.stats.skipped;
+            document.getElementById('stat-errors').textContent = data.stats.errors;
+
+            // Status
+            const statusEl = document.getElementById('stat-status');
+            if (data.waiting) {
+                statusEl.textContent = '⏸️';
+                statusEl.classList.add('pulse-waiting');
+                isWaiting = true;
+            } else {
+                statusEl.textContent = '▶️';
+                statusEl.classList.remove('pulse-waiting');
+                isWaiting = false;
+            }
+
+            // Enable/disable buttons
+            document.getElementById('btn-next').disabled = !data.waiting;
+            document.getElementById('btn-skip').disabled = !data.waiting;
+            document.getElementById('btn-stop').disabled = !data.waiting;
+
+            // URL
+            currentUrl = data.url || null;
+            document.getElementById('current-url').textContent = data.url || 'Warte auf Collector...';
+            document.getElementById('current-plz').textContent = data.plz || '—';
+
+            // Entry data
+            const noData = document.getElementById('no-data');
+            const parseError = document.getElementById('parse-error');
+            const dataContainer = document.getElementById('data-container');
+
+            if (!data.url) {
+                noData.classList.remove('hidden');
+                parseError.classList.add('hidden');
+                dataContainer.classList.add('hidden');
+            } else if (!data.entry) {
+                noData.classList.add('hidden');
+                parseError.classList.remove('hidden');
+                dataContainer.classList.add('hidden');
+            } else {
+                noData.classList.add('hidden');
+                parseError.classList.add('hidden');
+                dataContainer.classList.remove('hidden');
+
+                const entry = data.entry;
+                const k = entry.kanzlei;
+
+                // Entry type badge
+                const typeEl = document.getElementById('entry-type');
+                typeEl.classList.remove('hidden');
+                typeEl.textContent = entry.is_einzelperson ? 'Einzelperson' : 'Gesellschaft';
+                typeEl.className = entry.is_einzelperson
+                    ? 'text-xs bg-blue-600 px-2 py-0.5 rounded'
+                    : 'text-xs bg-purple-600 px-2 py-0.5 rounded';
+
+                // Kanzlei data
+                document.getElementById('kanzlei-name').textContent = k.name || '—';
+                document.getElementById('kanzlei-rechtsform').textContent = k.rechtsform || '—';
+                document.getElementById('kanzlei-adresse').textContent = k.strasse || '—';
+                document.getElementById('kanzlei-plzort').textContent =
+                    k.plz && k.ort ? `${k.plz} ${k.ort}` : '—';
+                document.getElementById('kanzlei-telefon').textContent = k.telefon || '—';
+                document.getElementById('kanzlei-email').textContent = k.email || '—';
+                document.getElementById('kanzlei-website').textContent = k.website || '—';
+                document.getElementById('kanzlei-kammer').textContent = k.kammer_name || '—';
+
+                // Steuerberater
+                const stbList = entry.steuerberater || [];
+                document.getElementById('stb-count').textContent = stbList.length;
+
+                const listEl = document.getElementById('steuerberater-list');
+                const noStbEl = document.getElementById('no-steuerberater');
+
+                if (stbList.length === 0) {
+                    listEl.innerHTML = '';
+                    noStbEl.classList.remove('hidden');
+                } else {
+                    noStbEl.classList.add('hidden');
+                    listEl.innerHTML = stbList.map((stb, i) => `
+                        <div class="card-inner rounded p-2">
+                            <div class="grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
+                                <div class="truncate"><span class="text-gray-400">Name:</span> <span class="font-medium">${stb.vorname || ''} ${stb.nachname}</span></div>
+                                <div class="truncate"><span class="text-gray-400">Titel:</span> ${stb.titel || '—'}</div>
+                                <div class="truncate"><span class="text-gray-400">Safe ID:</span> <span class="text-xs">${stb.safe_id ? stb.safe_id.substring(0, 30) + '...' : '—'}</span></div>
+                                <div class="truncate"><span class="text-gray-400">E-Mail:</span> ${stb.email || '—'}</div>
+                                <div class="truncate"><span class="text-gray-400">Mobil:</span> ${stb.mobil || '—'}</div>
+                                <div class="truncate"><span class="text-gray-400">Bestellt:</span> ${stb.bestelldatum || '—'}</div>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            }
+        }
+
+        function sendAction(action) {
+            if (!isWaiting) return;
+
+            fetch('/api/action', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({action})
+            }).then(r => r.json())
+              .then(data => {
+                  if (data.ok) {
+                      console.log('Action sent:', action);
+                  }
+              });
+        }
+
+        function sendFeedback() {
+            const input = document.getElementById('feedback-input');
+            const feedback = input.value.trim();
+
+            if (!feedback) {
+                input.focus();
+                return;
+            }
+
+            fetch('/api/feedback', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({feedback})
+            }).then(r => r.json())
+              .then(data => {
+                  if (data.ok) {
+                      input.value = '';
+                      document.getElementById('feedback-count').textContent = data.count;
+                      input.placeholder = '✅ Gespeichert!';
+                      setTimeout(() => {
+                          input.placeholder = 'Feedback/Notiz...';
+                      }, 1500);
+                  }
+              });
+        }
+
+        // Update feedback count
+        function updateFeedbackCount() {
+            fetch('/api/feedback')
+                .then(r => r.json())
+                .then(data => {
+                    document.getElementById('feedback-count').textContent = data.length;
+                });
+        }
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            const feedbackInput = document.getElementById('feedback-input');
+            if (document.activeElement === feedbackInput) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    sendFeedback();
+                }
+                return;
+            }
+
+            if (!isWaiting) return;
+
+            if (e.key === 'Enter') {
+                sendAction('next');
+            } else if (e.key === 's' || e.key === 'S') {
+                sendAction('skip');
+            } else if (e.key === 'Escape') {
+                sendAction('stop');
+            }
+        });
+
+        // Start
+        poll();
+        updateFeedbackCount();
+    </script>
+</body>
+</html>

@@ -26,6 +26,13 @@ class Job(db.Model):
     error_message = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
+    # AI Matching Statistics
+    ai_requests = db.Column(db.Integer, default=0)
+    ai_tokens_input = db.Column(db.Integer, default=0)
+    ai_tokens_output = db.Column(db.Integer, default=0)
+    ai_cost = db.Column(db.Float, default=0.0)  # USD
+    ai_budget_exhausted = db.Column(db.Boolean, default=False)
+
     # Relationship to log entries
     log_entries = db.relationship(
         "LogEntry",
@@ -36,7 +43,8 @@ class Job(db.Model):
 
     # Job types
     JOB_TYPES = [
-        ("scraper", "DATEV Scraper"),
+        ("scraper", "DATEV Collector"),
+        ("collector_bstbk", "BStBK Collector"),
         ("enrich_email", "Phase 1: E-Mail-Domain"),
         ("enrich_search", "Phase 2: Websuche"),
         ("blacklist_sync", "Blacklist Sync"),
@@ -71,6 +79,31 @@ class Job(db.Model):
     def __repr__(self) -> str:
         return f"<Job {self.id} {self.job_type} [{self.status}]>"
 
+    @property
+    def ai_cost_formatted(self) -> str:
+        """Format AI cost as USD string."""
+        if self.ai_cost is None or self.ai_cost == 0:
+            return "-"
+        return f"${self.ai_cost:.4f}"
+
+    @property
+    def has_ai_usage(self) -> bool:
+        """Check if this job used AI matching."""
+        return self.ai_requests > 0
+
+    def add_ai_usage(self, tokens_input: int, tokens_output: int, cost: float):
+        """Add AI usage statistics to this job.
+
+        Args:
+            tokens_input: Number of input tokens
+            tokens_output: Number of output tokens
+            cost: Cost in USD
+        """
+        self.ai_requests = (self.ai_requests or 0) + 1
+        self.ai_tokens_input = (self.ai_tokens_input or 0) + tokens_input
+        self.ai_tokens_output = (self.ai_tokens_output or 0) + tokens_output
+        self.ai_cost = (self.ai_cost or 0.0) + cost
+
     def to_dict(self) -> dict:
         """Convert to dictionary for JSON serialization."""
         return {
@@ -85,4 +118,10 @@ class Job(db.Model):
             "exit_code": self.exit_code,
             "error_message": self.error_message,
             "created_at": self.created_at.isoformat() if self.created_at else None,
+            "ai_requests": self.ai_requests,
+            "ai_tokens_input": self.ai_tokens_input,
+            "ai_tokens_output": self.ai_tokens_output,
+            "ai_cost": self.ai_cost,
+            "ai_cost_formatted": self.ai_cost_formatted,
+            "ai_budget_exhausted": self.ai_budget_exhausted,
         }
