@@ -26,6 +26,11 @@ class Job(db.Model):
     error_message = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
+    # Process tracking (for robust job management)
+    pid = db.Column(db.Integer)  # Process ID
+    pgid = db.Column(db.Integer)  # Process Group ID
+    last_heartbeat = db.Column(db.DateTime)  # Last health check
+
     # AI Matching Statistics
     ai_requests = db.Column(db.Integer, default=0)
     ai_tokens_input = db.Column(db.Integer, default=0)
@@ -118,6 +123,9 @@ class Job(db.Model):
             "exit_code": self.exit_code,
             "error_message": self.error_message,
             "created_at": self.created_at.isoformat() if self.created_at else None,
+            "pid": self.pid,
+            "pgid": self.pgid,
+            "last_heartbeat": self.last_heartbeat.isoformat() if self.last_heartbeat else None,
             "ai_requests": self.ai_requests,
             "ai_tokens_input": self.ai_tokens_input,
             "ai_tokens_output": self.ai_tokens_output,

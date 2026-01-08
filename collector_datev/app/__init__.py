@@ -51,7 +51,34 @@ def create_app(config_name: str | None = None) -> Flask:
     with app.app_context():
         db.create_all()
 
+    # Initialize job management (recovery + heartbeat)
+    _init_job_management(app)
+
     return app
+
+
+def _init_job_management(app: Flask) -> None:
+    """Initialize job management: recover orphaned jobs and start heartbeat.
+
+    Only runs in the main process (not in Flask reloader subprocess).
+    """
+    from app.services.job_service import JobService
+
+    # Check if we're in the main process (not reloader)
+    # In debug mode, Flask runs the reloader which spawns another process
+    is_main_process = (
+        not app.debug
+        or os.environ.get("WERKZEUG_RUN_MAIN") == "true"
+    )
+
+    if not is_main_process:
+        return
+
+    # Recover orphaned jobs from previous server run
+    JobService.recover_orphaned_jobs(app)
+
+    # Start heartbeat monitor for job health checks
+    JobService.start_heartbeat_monitor(app)
 
 
 def _configure_app(app: Flask, config_name: str | None) -> None:
