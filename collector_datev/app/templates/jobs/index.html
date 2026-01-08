@@ -36,7 +36,8 @@
             </div>
             <form hx-delete="/api/jobs/{{ running_job.id }}"
                   hx-confirm="Job wirklich abbrechen?"
-                  hx-swap="none">
+                  hx-swap="none"
+                  hx-on::after-request="if(event.detail.successful) { setTimeout(() => window.location.reload(), 1000); }">
                 <button class="btn btn-outline btn-error btn-sm">
                     <i class="ti ti-player-stop"></i>
                     Abbrechen
@@ -512,5 +513,74 @@ document.body.addEventListener('htmx:afterRequest', function(event) {
         window.location.reload();
     }
 });
+
+// Timeout-Warnung für hängende Jobs
+const TIMEOUT_WARNING_MS = 5 * 60 * 1000; // 5 Minuten
+
+function checkJobTimeout() {
+    const logOutput = document.getElementById('live-log-output');
+    if (!logOutput) return;
+
+    // Finde die neueste Log-Zeile (wird oben eingefügt via afterbegin)
+    const firstPre = logOutput.querySelector('pre:first-child');
+    if (!firstPre) return;
+
+    // Timestamp aus data-prefix extrahieren (Format: HH:MM:SS)
+    const timestamp = firstPre.dataset?.prefix;
+    if (!timestamp || timestamp === '>' || timestamp === '→') return;
+
+    // Parse Timestamp
+    const parts = timestamp.split(':');
+    if (parts.length !== 3) return;
+
+    const [h, m, s] = parts.map(Number);
+    if (isNaN(h) || isNaN(m) || isNaN(s)) return;
+
+    // Berechne Zeitdifferenz
+    const now = new Date();
+    const logTime = new Date();
+    logTime.setHours(h, m, s, 0);
+
+    // Falls Log-Zeit "in der Zukunft" ist (Mitternacht-Übergang), ignorieren
+    if (logTime > now) return;
+
+    const diff = now - logTime;
+    if (diff > TIMEOUT_WARNING_MS) {
+        showTimeoutWarning(Math.floor(diff / 60000));
+    }
+}
+
+function showTimeoutWarning(minutes) {
+    const existing = document.getElementById('timeout-warning');
+    if (existing) {
+        // Update existing warning
+        existing.querySelector('span').innerHTML = `
+            <strong>Job scheint zu hängen!</strong> Keine Aktivität seit ${minutes} Minuten.
+            Versuche den Job abzubrechen.
+        `;
+        return;
+    }
+
+    const warning = document.createElement('div');
+    warning.id = 'timeout-warning';
+    warning.className = 'alert alert-warning mt-4';
+    warning.innerHTML = `
+        <i class="ti ti-alert-triangle"></i>
+        <span><strong>Job scheint zu hängen!</strong> Keine Aktivität seit ${minutes} Minuten.
+        Versuche den Job abzubrechen.</span>
+    `;
+
+    const logOutput = document.getElementById('live-log-output');
+    if (logOutput && logOutput.parentNode) {
+        logOutput.parentNode.insertBefore(warning, logOutput);
+    }
+}
+
+// Prüfe alle 30 Sekunden ob Job hängt
+if (document.getElementById('live-log-output')) {
+    setInterval(checkJobTimeout, 30000);
+    // Erste Prüfung nach 10 Sekunden
+    setTimeout(checkJobTimeout, 10000);
+}
 </script>
 {% endblock %}

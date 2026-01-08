@@ -5,6 +5,8 @@ Manages subprocess execution for CLI tools with log streaming.
 
 from __future__ import annotations
 
+import os
+import signal
 import subprocess
 import threading
 from datetime import datetime
@@ -75,7 +77,7 @@ class JobService:
                 # Add initial log entry
                 cls._add_log(job_id, "INFO", f"Starte Job: {' '.join(cmd)}")
 
-                # Start process
+                # Start process with own process group (for clean termination)
                 process = subprocess.Popen(
                     cmd,
                     stdout=subprocess.PIPE,
@@ -83,6 +85,7 @@ class JobService:
                     text=True,
                     bufsize=1,  # Line-buffered
                     cwd=str(app.config["PROJECT_ROOT"]),
+                    preexec_fn=os.setsid,  # Eigene Prozessgruppe für Child-Prozesse
                 )
                 cls._processes[job_id] = process
 
@@ -211,22 +214,58 @@ class JobService:
 
     @classmethod
     def cancel_job(cls, job_id: int) -> bool:
-        """Cancel a running job.
+        """Cancel a running job with robust termination.
+
+        Tries SIGTERM first, then SIGKILL if process doesn't respond.
+        Also kills entire process group to handle child processes (Playwright/Chromium).
 
         Returns:
             True if job was cancelled, False otherwise
         """
         process = cls._processes.get(job_id)
-        if process:
-            process.terminate()
-            job = Job.query.get(job_id)
-            if job:
-                job.status = "cancelled"
-                job.finished_at = datetime.utcnow()
-                db.session.commit()
-                cls._add_log(job_id, "WARNING", "Job wurde abgebrochen")
-            return True
-        return False
+        if not process:
+            return False
+
+        try:
+            # Versuche sanften Abbruch (SIGTERM) auf Prozessgruppe
+            try:
+                pgid = os.getpgid(process.pid)
+                os.killpg(pgid, signal.SIGTERM)
+            except (ProcessLookupError, OSError):
+                # Prozess existiert nicht mehr oder keine Berechtigung
+                process.terminate()
+
+            # Warte max 5 Sekunden auf Beendigung
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                # SIGTERM hat nicht funktioniert → SIGKILL
+                cls._add_log(job_id, "WARNING", "Prozess reagiert nicht, erzwinge Beendigung...")
+                try:
+                    pgid = os.getpgid(process.pid)
+                    os.killpg(pgid, signal.SIGKILL)
+                except (ProcessLookupError, OSError):
+                    process.kill()
+                process.wait(timeout=5)
+
+        except Exception as e:
+            # Letzter Fallback
+            cls._add_log(job_id, "ERROR", f"Fehler beim Beenden: {e}")
+            try:
+                process.kill()
+            except Exception:
+                pass
+
+        # Status aktualisieren
+        job = Job.query.get(job_id)
+        if job:
+            job.status = "cancelled"
+            job.finished_at = datetime.utcnow()
+            db.session.commit()
+            cls._add_log(job_id, "WARNING", "Job wurde abgebrochen")
+
+        cls._processes.pop(job_id, None)
+        return True
 
     @classmethod
     def get_running_job(cls) -> Job | None:

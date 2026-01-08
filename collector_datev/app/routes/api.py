@@ -55,9 +55,15 @@ def get_job(job_id: int):
 @api_bp.route("/jobs/<int:job_id>", methods=["DELETE"])
 def cancel_job(job_id: int):
     """Cancel a running job."""
+    job = Job.query.get_or_404(job_id)
+
+    # Prüfen ob Job überhaupt läuft
+    if job.status != "running":
+        return jsonify({"error": f"Job läuft nicht (Status: {job.status})"}), 400
+
     success = JobService.cancel_job(job_id)
     if success:
-        return jsonify({"message": "Job abgebrochen"}), 200
+        return jsonify({"message": "Job abgebrochen", "job_id": job_id}), 200
     return jsonify({"error": "Job konnte nicht abgebrochen werden"}), 400
 
 
