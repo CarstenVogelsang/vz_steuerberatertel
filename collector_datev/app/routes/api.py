@@ -6,7 +6,7 @@ REST endpoints for HTMX interactions and job management.
 from flask import Blueprint, jsonify, request
 
 from app import db
-from app.models import Domain, Job
+from app.models import Domain, Job, PlzCollector
 from app.services.job_service import JobService
 
 api_bp = Blueprint("api", __name__, url_prefix="/api")
@@ -29,6 +29,15 @@ def create_job():
 
     if not job_type:
         return jsonify({"error": "job_type ist erforderlich"}), 400
+
+    # Handle force_rescrape: Reset PLZ tracking for the filter
+    if parameters.get("force_rescrape"):
+        plz_filter = parameters.get("plz_filter", "")
+        # Map job_type to collector_type
+        collector_type = "bstbk" if job_type == "collector_bstbk" else "datev"
+        reset_count = PlzCollector.reset_for_filter(plz_filter, collector_type)
+        # Add reset info to parameters for logging
+        parameters["_reset_count"] = reset_count
 
     # Start the job
     job = JobService.start_job(job_type, parameters)
@@ -75,6 +84,21 @@ def restart_job(job_id: int):
     new_job = JobService.start_job(job.job_type, job.parameters or {})
 
     return jsonify(new_job.to_dict()), 201
+
+
+@api_bp.route("/jobs/plz-status", methods=["GET"])
+def get_plz_status():
+    """Get PLZ processing status for a filter.
+
+    Query params:
+        filter: PLZ prefix filter (e.g., '4' for PLZ 40000-49999)
+        collector: Collector type ('datev' or 'bstbk'), defaults to 'bstbk'
+    """
+    plz_filter = request.args.get("filter", "")
+    collector_type = request.args.get("collector", "bstbk")
+
+    status = PlzCollector.get_status_for_filter(plz_filter, collector_type)
+    return jsonify(status)
 
 
 @api_bp.route("/jobs/<int:job_id>/logs", methods=["GET"])

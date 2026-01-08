@@ -172,6 +172,12 @@ class JobService:
                 cmd.extend(["--max-plz", str(parameters["max_plz"])])
             if parameters.get("dry_run"):
                 cmd.append("--dry-run")
+            # Note: force_rescrape is handled in api.py (reset before job starts)
+            # but we still pass --force for direct CLI invocation awareness
+            if parameters.get("force_rescrape"):
+                cmd.append("--force")
+            if parameters.get("update_mode"):
+                cmd.extend(["--update-mode", str(parameters["update_mode"])])
 
         else:
             raise ValueError(f"Unbekannter Job-Typ: {job_type}")

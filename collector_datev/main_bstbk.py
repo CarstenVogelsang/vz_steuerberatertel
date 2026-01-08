@@ -121,6 +121,8 @@ async def main(
     debug_ui: bool = False,
     name_filter: str = None,
     use_ai: bool = False,
+    force: bool = False,
+    update_mode: str = "add_only",
 ):
     """Main entry point for BStBK scraper.
 
@@ -134,6 +136,8 @@ async def main(
         debug_ui: Enable web-based debug UI on port 5005
         name_filter: Only show entries whose name contains this text (case-insensitive)
         use_ai: Enable AI-assisted matching for Score=1 cases via OpenRouter
+        force: Re-scrape already processed PLZ (reset processed_at)
+        update_mode: 'add_only' = only add new data, 'update' = update existing
     """
     if verbose:
         logging.getLogger().setLevel(logging.DEBUG)
@@ -144,6 +148,9 @@ async def main(
     print(f"Modus:        {'Dry-Run' if dry_run else 'Live'}")
     print(f"Headless:     {'Ja' if headless else 'Nein'}")
     print(f"KI-Matching:  {'Ja' if use_ai else 'Nein'}")
+    if force:
+        print(f"Force:        Ja (Re-Scraping aktiviert)")
+        print(f"Update-Modus: {update_mode}")
     if debug:
         print(f"Debug:        Ja (Terminal-Modus)")
     if debug_ui:
@@ -170,6 +177,13 @@ async def main(
     # Create Flask app context
     app = create_app()
     with app.app_context():
+        # Handle --force: Reset processed_at for matching PLZ
+        if force and not dry_run:
+            reset_count = PlzCollector.reset_for_filter(plz_filter or "", COLLECTOR_TYPE)
+            if reset_count > 0:
+                print(f"🔄 {reset_count} PLZ für Re-Scraping zurückgesetzt")
+                print()
+
         # Get PLZ list from reference table (on-demand approach)
         # PLZ-Collector entries are created when processing, not pre-initialized
         plz_query = Plz.query.order_by(Plz.plz)
@@ -386,6 +400,18 @@ Beispiele:
         action="store_true",
         help="KI-gestütztes Matching aktivieren für unsichere Fälle (Score=1) via OpenRouter",
     )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Bereits verarbeitete PLZ erneut scrapen (Reset processed_at)",
+    )
+    parser.add_argument(
+        "--update-mode",
+        type=str,
+        choices=["add_only", "update"],
+        default="add_only",
+        help="Bei --force: 'add_only' = nur neue Daten, 'update' = bestehende aktualisieren",
+    )
 
     args = parser.parse_args()
 
@@ -400,5 +426,7 @@ Beispiele:
             debug_ui=args.debug_ui,
             name_filter=args.name_filter,
             use_ai=args.use_ai,
+            force=args.force,
+            update_mode=args.update_mode,
         )
     )

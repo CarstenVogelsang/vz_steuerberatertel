@@ -152,6 +152,73 @@ class PlzCollector(db.Model):
         }
 
     @classmethod
+    def reset_for_filter(cls, plz_filter: str, collector_type: str) -> int:
+        """Reset processed_at for all PLZ matching a filter.
+
+        This allows re-scraping of already processed PLZ.
+
+        Args:
+            plz_filter: PLZ prefix filter (e.g., '4' for PLZ 40000-49999)
+            collector_type: The collector type ('datev' or 'bstbk')
+
+        Returns:
+            Number of entries reset
+        """
+        query = cls.query.filter(
+            cls.collector_type == collector_type,
+            cls.processed_at.isnot(None),  # Only reset processed ones
+        )
+
+        if plz_filter:
+            query = query.filter(cls.plz.startswith(plz_filter))
+
+        count = query.update({
+            cls.processed_at: None,
+            cls.result_count: None,
+            cls.error_message: None,
+        })
+        db.session.commit()
+
+        return count
+
+    @classmethod
+    def get_status_for_filter(cls, plz_filter: str, collector_type: str) -> dict:
+        """Get processing status for PLZ matching a filter.
+
+        Args:
+            plz_filter: PLZ prefix filter (e.g., '4' for PLZ 40000-49999)
+            collector_type: The collector type ('datev' or 'bstbk')
+
+        Returns:
+            Dictionary with total, processed, pending, all_processed
+        """
+        from app.models import Plz
+
+        # Count total PLZ matching filter from reference table
+        plz_query = Plz.query
+        if plz_filter:
+            plz_query = plz_query.filter(Plz.plz.startswith(plz_filter))
+        total = plz_query.count()
+
+        # Count processed PLZ from collector table
+        processed_query = cls.query.filter(
+            cls.collector_type == collector_type,
+            cls.processed_at.isnot(None),
+        )
+        if plz_filter:
+            processed_query = processed_query.filter(cls.plz.startswith(plz_filter))
+        processed = processed_query.count()
+
+        pending = total - processed
+
+        return {
+            "total": total,
+            "processed": processed,
+            "pending": pending,
+            "all_processed": pending == 0 and total > 0,
+        }
+
+    @classmethod
     def init_from_plz_table(cls, collector_type: str) -> int:
         """Initialize PlzCollector entries from the existing plz table.
 

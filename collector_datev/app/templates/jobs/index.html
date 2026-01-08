@@ -6,6 +6,7 @@
 {# Single Source of Truth: Job descriptions defined ONCE, used in HTML and JavaScript #}
 {% set job_descriptions = {
     'scraper': 'Durchsucht den Bundesweiten Steuerberater-Suchdienst (datev.de/kasus) nach PLZ und speichert neue Einträge in Google Sheets. Bereits vorhandene Steuerberater (gleiche PLZ+Name) werden übersprungen.',
+    'collector_bstbk': 'Scraped das Steuerberaterverzeichnis der Bundessteuerberaterkammer (berufs-org.de) und speichert Kanzleien und Steuerberater in SQLite. Unterstützt KI-gestütztes Matching.',
     'enrich_email': 'Extrahiert Website-URLs aus E-Mail-Adressen der Steuerberater (z.B. info@kanzlei.de → kanzlei.de). Schnelle Methode mit hoher Trefferquote.',
     'enrich_search': 'Sucht per Web-Suche nach Websites für Steuerberater ohne bekannte URL. Nutzt Serper/Brave/DuckDuckGo APIs.',
     'blacklist_sync': 'Synchronisiert die Domain-Blacklist aus der SQLite-Datenbank mit der lokalen domain_blacklist.txt Datei.'
@@ -217,11 +218,45 @@
                     <label class="label">
                         <span class="label-text">PLZ-Filter</span>
                     </label>
-                    <input type="text" name="plz_filter" placeholder="z.B. 4 für PLZ 40000-49999"
+                    <input type="text" name="plz_filter" id="plz_filter_input"
+                           placeholder="z.B. 4 für PLZ 40000-49999"
                            class="input input-bordered">
                     <label class="label">
                         <span class="label-text-alt">Leer = alle PLZ</span>
                     </label>
+                </div>
+
+                <!-- PLZ Status (dynamically loaded) -->
+                <div id="plz-status-container" class="mb-4 hidden">
+                    <div id="plz-status-info" class="alert alert-info">
+                        <i class="ti ti-info-circle"></i>
+                        <span id="plz-status-text"></span>
+                    </div>
+                </div>
+
+                <!-- Re-Scraping Option -->
+                <div id="rescrape-section" class="form-control mb-4 hidden">
+                    <label class="label cursor-pointer justify-start gap-3">
+                        <input type="checkbox" name="force_rescrape" id="force_rescrape" class="checkbox checkbox-warning">
+                        <span class="label-text">Bereits verarbeitete PLZ erneut scrapen</span>
+                    </label>
+                </div>
+
+                <!-- Update Mode (only visible when force_rescrape is checked) -->
+                <div id="update-mode-section" class="mb-4 hidden pl-8">
+                    <label class="label-text font-medium">Daten-Aktualisierung</label>
+                    <div class="form-control">
+                        <label class="label cursor-pointer justify-start gap-3">
+                            <input type="radio" name="update_mode" value="add_only" class="radio radio-sm" checked>
+                            <span class="label-text">Nur neue Daten hinzufügen (Standard)</span>
+                        </label>
+                    </div>
+                    <div class="form-control">
+                        <label class="label cursor-pointer justify-start gap-3">
+                            <input type="radio" name="update_mode" value="update" class="radio radio-sm">
+                            <span class="label-text">Bestehende Daten aktualisieren</span>
+                        </label>
+                    </div>
                 </div>
 
                 <!-- Confidence Filter (for enrich_search) -->
@@ -309,6 +344,7 @@ function updateJobParameters() {
     const jobType = document.querySelector('input[name="job_type"]:checked').value;
     const confidenceOptions = document.getElementById('confidence-options');
     const providerOptions = document.getElementById('provider-options');
+    const rescrapeSection = document.getElementById('rescrape-section');
 
     // Show/hide options based on job type
     if (jobType === 'enrich_search') {
@@ -318,10 +354,77 @@ function updateJobParameters() {
         confidenceOptions.style.display = 'none';
         providerOptions.style.display = 'none';
     }
+
+    // Show re-scrape option for collector jobs
+    if (jobType === 'collector_bstbk' || jobType === 'scraper') {
+        rescrapeSection.classList.remove('hidden');
+        // Trigger PLZ status check
+        checkPlzStatus();
+    } else {
+        rescrapeSection.classList.add('hidden');
+        document.getElementById('plz-status-container').classList.add('hidden');
+    }
+}
+
+// PLZ Status check with debounce
+let plzStatusTimeout;
+function checkPlzStatus() {
+    const jobType = document.querySelector('input[name="job_type"]:checked').value;
+    if (jobType !== 'collector_bstbk' && jobType !== 'scraper') return;
+
+    clearTimeout(plzStatusTimeout);
+    plzStatusTimeout = setTimeout(async () => {
+        const plzInput = document.getElementById('plz_filter_input');
+        const filter = plzInput.value.trim();
+        const collector = jobType === 'collector_bstbk' ? 'bstbk' : 'datev';
+
+        const statusContainer = document.getElementById('plz-status-container');
+        const statusInfo = document.getElementById('plz-status-info');
+        const statusText = document.getElementById('plz-status-text');
+
+        try {
+            const res = await fetch(`/api/jobs/plz-status?filter=${filter}&collector=${collector}`);
+            const data = await res.json();
+
+            statusContainer.classList.remove('hidden');
+
+            if (data.all_processed) {
+                statusInfo.className = 'alert alert-warning';
+                statusText.innerHTML = `<strong>Alle ${data.total} PLZ bereits verarbeitet!</strong><br>
+                    Aktiviere "Erneut scrapen" um die Daten zu aktualisieren.`;
+            } else if (data.pending === data.total) {
+                statusInfo.className = 'alert alert-success';
+                statusText.textContent = `${data.total} PLZ noch ausstehend`;
+            } else {
+                statusInfo.className = 'alert alert-info';
+                statusText.textContent = `${data.pending} von ${data.total} PLZ noch ausstehend`;
+            }
+        } catch (error) {
+            statusContainer.classList.add('hidden');
+        }
+    }, 300);
+}
+
+// Toggle update mode visibility based on force_rescrape checkbox
+function toggleUpdateMode() {
+    const forceRescrape = document.getElementById('force_rescrape').checked;
+    const updateModeSection = document.getElementById('update-mode-section');
+
+    if (forceRescrape) {
+        updateModeSection.classList.remove('hidden');
+    } else {
+        updateModeSection.classList.add('hidden');
+    }
 }
 
 // Initialize on load
-document.addEventListener('DOMContentLoaded', updateJobParameters);
+document.addEventListener('DOMContentLoaded', function() {
+    updateJobParameters();
+
+    // Add event listeners
+    document.getElementById('plz_filter_input').addEventListener('input', checkPlzStatus);
+    document.getElementById('force_rescrape').addEventListener('change', toggleUpdateMode);
+});
 
 // Handle form submission
 document.getElementById('new_job_form').addEventListener('submit', async function(e) {
@@ -336,6 +439,14 @@ document.getElementById('new_job_form').addEventListener('submit', async functio
         headless: formData.get('headless') === 'on',
         dry_run: formData.get('dry_run') === 'on',
     };
+
+    // Re-scraping parameters (for collector jobs)
+    if (jobType === 'collector_bstbk' || jobType === 'scraper') {
+        parameters.force_rescrape = formData.get('force_rescrape') === 'on';
+        if (parameters.force_rescrape) {
+            parameters.update_mode = formData.get('update_mode') || 'add_only';
+        }
+    }
 
     if (jobType === 'enrich_search') {
         const confidenceFilter = [];
