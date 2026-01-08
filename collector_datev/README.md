@@ -90,6 +90,19 @@ uv run flask run
 uv run python run.py
 ```
 
+### Stoppen
+
+```bash
+# Option 1: Im Terminal wo der Server laeuft
+Ctrl+C
+
+# Option 2: Von einem anderen Terminal aus
+pkill -f "flask run"
+
+# Option 3: Prozess auf Port 5444 direkt beenden
+lsof -ti :5444 | xargs kill
+```
+
 ### URLs
 
 | URL | Beschreibung |
